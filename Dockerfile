@@ -14,7 +14,10 @@ RUN apk --no-cache add ca-certificates tzdata
 WORKDIR /app
 
 COPY --from=builder /agent .
-COPY .env.example .env
 
+# Runs the web UI *and* the auto-publish scheduler together on :8081.
+# Config comes from real environment variables (e.g. docker --env-file),
+# so we deliberately do NOT bake .env into the image.
+EXPOSE 8081
 ENTRYPOINT ["/app/agent"]
-CMD []
+CMD ["-serve", "-addr=:8081"]
