@@ -1,0 +1,241 @@
+{{define "dashboard"}}
+{{$data := .}}
+{{$drafts := index $data "Drafts"}}
+{{$published := index $data "Published"}}
+{{$cycles := index $data "Cycles"}}
+
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">
+    <span class="card-icon">✍️</span>
+    <h2>Generate Posts from Topic</h2>
+  </div>
+  <form id="genForm" style="display:flex;gap:8px;">
+    <input id="queryInput" type="text" placeholder="e.g. AI security risks, remote work trends, startup fundraising..." required style="flex:1;padding:10px 14px;border:2px solid var(--border);border-radius:8px;font-size:15px;">
+    <button type="submit" class="btn btn-primary" id="genBtn">Generate Posts</button>
+  </form>
+</div>
+
+<div id="generatedSection" style="display:none;">
+  <h2 style="margin-bottom:12px;">Generated Posts</h2>
+  <div id="generatedPosts"></div>
+</div>
+
+<div id="loadingSection" style="display:none;text-align:center;padding:40px;">
+  <div class="spinner" style="margin:0 auto;"></div>
+  <div class="loading-text" id="loadingText">Generating post ideas...</div>
+  <div class="loading-text" id="timerText" style="font-size:13px;color:var(--text-dim);margin-top:4px;"></div>
+</div>
+
+<script>
+(function(){
+var form = document.getElementById('genForm');
+var input = document.getElementById('queryInput');
+var btn = document.getElementById('genBtn');
+var section = document.getElementById('generatedSection');
+var posts = document.getElementById('generatedPosts');
+var loading = document.getElementById('loadingSection');
+var loadingText = document.getElementById('loadingText');
+var timerText = document.getElementById('timerText');
+
+window.generating = false;
+var startTime;
+var timerInterval;
+
+function escapeHtml(str) {
+  var div = document.createElement('div');
+  div.appendChild(document.createTextNode(str));
+  return div.innerHTML;
+}
+
+function topicEmoji(title) {
+  var t = title.toLowerCase();
+  if (/ai|intelligence|machine|deep|neural/.test(t)) return '🤖';
+  if (/security|cyber|hack|threat|breach|malware/.test(t)) return '🔒';
+  if (/data|database|analytics|big data/.test(t)) return '📊';
+  if (/cloud|aws|azure|gcp|serverless/.test(t)) return '☁️';
+  if (/api|graphql|grpc|rest/.test(t)) return '🔗';
+  if (/code|develop|program|software|engineer/.test(t)) return '💻';
+  if (/startup|funding|venture|invest/.test(t)) return '🚀';
+  if (/remote|work|hybrid|wfh/.test(t)) return '🏠';
+  if (/blockchain|web3|crypto|nft/.test(t)) return '🔗';
+  if (/design|ux|ui|user/.test(t)) return '🎨';
+  if (/leader|manage|team|culture/.test(t)) return '👥';
+  if (/future|trend|2026|2025|predict/.test(t)) return '🔮';
+  return '💡';
+}
+
+function hashColor(title) {
+  var hash = 0;
+  for (var i = 0; i < title.length; i++) {
+    hash = title.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  var h = Math.abs(hash) % 360;
+  return { h: h, s: 50 + (hash % 25), l: 38 + (hash % 15) };
+}
+
+// Note: no reload on tab switch — the SSE stream keeps receiving events while
+// the tab is hidden, so progress and results are intact when you come back.
+
+form.addEventListener('submit', function(e) {
+  e.preventDefault();
+  var query = input.value.trim();
+  if (!query) return;
+
+  window.generating = true;
+  posts.innerHTML = '';
+  section.style.display = 'block';
+  loading.style.display = 'block';
+  btn.disabled = true;
+  btn.textContent = 'Generating...';
+  startTime = Date.now();
+  timerText.textContent = '0s elapsed';
+  timerInterval = setInterval(function() {
+    var elapsed = Math.floor((Date.now() - startTime) / 1000);
+    timerText.textContent = (elapsed >= 60 ? Math.floor(elapsed/60) + 'm ' : '') + (elapsed % 60) + 's elapsed';
+  }, 1000);
+
+  var es = new EventSource('/generate-stream?query=' + encodeURIComponent(query));
+
+  es.addEventListener('start', function() {
+    loadingText.textContent = 'Generating post ideas...';
+  });
+
+  es.addEventListener('ideas', function(e) {
+    var data = JSON.parse(e.data);
+    loadingText.textContent = 'Generating ' + data.total + ' posts...';
+  });
+
+  es.addEventListener('generating', function(e) {
+    var data = JSON.parse(e.data);
+    loadingText.textContent = 'Writing: ' + data.title;
+  });
+
+  es.addEventListener('draft', function(e) {
+    loading.style.display = 'none';
+    var data = JSON.parse(e.data);
+    var bodyPreview = data.body.length > 200 ? data.body.substring(0, 200) + '...' : data.body;
+    var hashtags = data.hashtags && data.hashtags.length > 0 ? data.hashtags.join(' ') : '';
+    var c = hashColor(data.title);
+    var emoji = topicEmoji(data.title);
+
+    var card = document.createElement('div');
+    card.className = 'idea-card generated-draft';
+    card.style.cssText = 'opacity:0;transform:translateY(10px);';
+    card.innerHTML =
+      '<div style="display:flex;gap:16px;">' +
+        '<div style="flex-shrink:0;width:200px;height:130px;border-radius:8px;overflow:hidden;">' +
+          '<div style="width:100%;height:100%;background:linear-gradient(135deg,hsl(' + c.h + ',' + c.s + '%,' + c.l + '%),hsl(' + ((c.h + 40) % 360) + ',' + (c.s + 10) + '%,' + (c.l - 10) + '%));display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;text-align:center;">' +
+            '<span style="font-size:36px;margin-bottom:6px;">' + emoji + '</span>' +
+            '<span style="color:#fff;font-size:13px;font-weight:600;line-height:1.3;text-shadow:0 1px 3px rgba(0,0,0,0.3);word-break:break-word;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;">' + escapeHtml(data.title) + '</span>' +
+          '</div>' +
+        '</div>' +
+        '<div style="flex:1;min-width:0;">' +
+          '<div style="font-size:15px;font-weight:700;color:var(--text);line-height:1.3;">' + escapeHtml(data.title) + '</div>' +
+          '<div style="font-size:13px;color:var(--text-muted);line-height:1.5;white-space:pre-wrap;margin-top:6px;">' + escapeHtml(bodyPreview) + '</div>' +
+          (hashtags ? '<div style="font-size:12px;color:var(--blue);margin-top:6px;">' + escapeHtml(hashtags) + '</div>' : '') +
+          '<div style="margin-top:8px;"><a href="/drafts/' + encodeURIComponent(data.id) + '" class="btn btn-outline btn-sm">Preview & Approve</a></div>' +
+        '</div>' +
+      '</div>';
+    posts.appendChild(card);
+
+    requestAnimationFrame(function() {
+      card.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+      card.style.opacity = '1';
+      card.style.transform = 'translateY(0)';
+    });
+    section.style.display = 'block';
+  });
+
+  // One failed draft shouldn't kill the stream — show a toast and continue.
+  es.addEventListener('drafterror', function(e) {
+    try {
+      var d = JSON.parse(e.data);
+      if (window.showToast) showToast('Failed: ' + d.title, 'error');
+    } catch (_) {}
+  });
+
+  // Built-in error = connection problem. Close immediately so EventSource's
+  // auto-reconnect doesn't re-run the whole generation and create duplicates.
+  es.addEventListener('error', function() {
+    loading.style.display = 'none';
+    clearInterval(timerInterval);
+    btn.disabled = false;
+    btn.textContent = 'Generate Posts';
+    window.generating = false;
+    es.close();
+    if (window.showToast) showToast('Connection lost — generation continues in background. Check Drafts in a minute.', 'error');
+  });
+
+  es.addEventListener('done', function() {
+    es.close();
+    clearInterval(timerInterval);
+    btn.disabled = false;
+    btn.textContent = 'Generate Posts';
+    window.generating = false;
+    loadingText.textContent = 'Done!';
+    timerText.textContent = '✔ ' + Math.floor((Date.now() - startTime) / 1000) + 's total';
+    setTimeout(function() { loading.style.display = 'none'; }, 1500);
+  });
+});
+})();
+</script>
+
+<div class="grid-3" style="margin-bottom:24px;">
+  <div class="card stat">
+    <div class="stat-value">{{len $drafts}}</div>
+    <div class="stat-label">Pending Drafts</div>
+  </div>
+  <div class="card stat">
+    <div class="stat-value">{{len $published}}</div>
+    <div class="stat-label">Published Posts</div>
+  </div>
+  <div class="card stat">
+    <div class="stat-value">{{len $cycles}}</div>
+    <div class="stat-label">Recent Cycles</div>
+  </div>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <h2>Recent Drafts</h2>
+    {{if $drafts}}
+      {{range $i, $d := $drafts}}
+      <div class="draft-row" style="display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);align-items:flex-start;">
+        <div class="draft-avatar" style="flex-shrink:0;width:56px;height:56px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px;font-weight:700;text-shadow:0 1px 2px rgba(0,0,0,0.2);">
+          {{if $d.Title}}{{firstChar $d.Title}}{{else}}?{{end}}
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:14px;font-weight:600;color:var(--text);line-height:1.3;">
+            <a href="/drafts/{{$d.ID}}" style="color:inherit;text-decoration:none;">{{if $d.Title}}{{$d.Title}}{{else}}{{truncate $d.Body 60}}{{end}}</a>
+          </div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:3px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">{{truncate $d.Body 120}}</div>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">
+            <span class="tag tag-{{$d.Status}}">{{$d.Status}}</span>
+            — {{formatTimeIST $d.CreatedAt}}
+            {{if $d.ScheduledFor}}<span style="color:var(--blue);">⏰ {{formatScheduled $d.ScheduledFor "Asia/Kolkata"}}</span>{{end}}
+            {{if eq $d.Status "approved"}}<form method="POST" action="/drafts/{{$d.ID}}/cancel-schedule" style="display:inline;"><button type="submit" class="btn btn-sm" style="font-size:11px;color:var(--red-t);border:1px solid var(--red-t);background:transparent;border-radius:3px;cursor:pointer;padding:1px 6px;margin-left:4px;">Cancel</button></form>{{end}}
+            <a href="/drafts/{{$d.ID}}" style="margin-left:8px;font-size:12px;">Preview →</a>
+          </div>
+        </div>
+      </div>
+      {{end}}
+    {{else}}
+      <div class="empty">No drafts yet. Type a topic above to generate posts.</div>
+    {{end}}
+  </div>
+
+  <div class="card">
+    <h2>Recent Publications</h2>
+    {{if $published}}
+      {{range $published}}
+      <div class="draft-item">
+        <div><a href="{{.PostURL}}" target="_blank">{{truncate .ID 40}}</a></div>
+        <div class="meta">{{formatTimeIST .PostedAt}}</div>
+      </div>
+      {{end}}
+    {{else}}
+      <div class="empty">No posts published yet.</div>
+    {{end}}
+  </div>
+</div>
+{{end}}

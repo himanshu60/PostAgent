@@ -1,0 +1,16 @@
+{{define "cycles"}}
+<div class="card">
+  <h2>Agent Cycles</h2>
+  {{$cycles := .}}
+  {{if $cycles}}
+    {{range $cycles}}
+    <div class="draft-item">
+      <div>Cycle <strong>{{truncate .ID 20}}</strong></div>
+      <div class="meta">Status: {{.Status}} — {{formatTimeIST .StartedAt}}</div>
+    </div>
+    {{end}}
+  {{else}}
+    <div class="empty">No cycles run yet.</div>
+  {{end}}
+</div>
+{{end}}

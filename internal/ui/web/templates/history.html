@@ -1,0 +1,89 @@
+{{define "history"}}
+{{$data := .}}
+{{$published := index $data "Published"}}
+{{$examples := index $data "Examples"}}
+{{$pattern := index $data "Pattern"}}
+
+{{if $pattern}}
+<div class="card">
+  <h2>Your Post Style Analysis</h2>
+  <p style="font-size:13px;color:var(--text-dim);margin-bottom:12px;">Based on {{$pattern.PostCount}} example posts you provided</p>
+  <div class="pattern-grid">
+    <div class="pattern-item">
+      <div class="value">{{$pattern.AvgLength}}</div>
+      <div class="label">Avg Characters</div>
+    </div>
+    <div class="pattern-item">
+      <div class="value">{{$pattern.AvgEmojiCount}}</div>
+      <div class="label">Avg Emojis</div>
+    </div>
+    <div class="pattern-item">
+      <div class="value">{{$pattern.AvgHashtagCount}}</div>
+      <div class="label">Avg Hashtags</div>
+    </div>
+    <div class="pattern-item">
+      <div class="value">{{$pattern.AvgLineBreaks}}</div>
+      <div class="label">Avg Paragraphs</div>
+    </div>
+    <div class="pattern-item">
+      <div class="value" style="font-size:14px;">{{$pattern.Tone}}</div>
+      <div class="label">Tone</div>
+    </div>
+    <div class="pattern-item">
+      <div class="value" style="font-size:14px;">{{$pattern.StructureFormat}}</div>
+      <div class="label">Structure</div>
+    </div>
+  </div>
+  <div style="margin-top:12px;font-size:13px;color:var(--text-dim);">
+    Future generations will match this style automatically.
+  </div>
+</div>
+{{else}}
+<div class="card">
+  <h2>Post Style Analysis</h2>
+  <div class="empty">Paste 2-3 of your past LinkedIn posts below to analyze your style.</div>
+</div>
+{{end}}
+
+<div class="card">
+  <h2>Add Example Posts</h2>
+  <p style="font-size:13px;color:var(--text-dim);margin-bottom:8px;">Paste your past LinkedIn posts here so the AI learns your style.</p>
+  <form method="POST" action="/history/add">
+    <input type="text" name="image_url" placeholder="Image URL (optional)" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;width:100%;margin-bottom:8px;font-size:14px;">
+    <textarea name="body" class="edit-area" placeholder="Paste one of your LinkedIn posts here..."></textarea>
+    <div style="margin-top:8px;">
+      <button type="submit" class="btn btn-primary">Add Example</button>
+    </div>
+  </form>
+  <form method="POST" action="/history/clear" style="margin-top:8px;" data-confirm="Delete ALL example posts? Your style analysis will be lost. This cannot be undone.">
+    <button type="submit" class="btn btn-danger btn-sm">Clear All Examples</button>
+  </form>
+</div>
+
+{{if $examples}}
+<div class="card">
+  <h2>Your Example Posts</h2>
+  {{range $examples}}
+  <div class="draft-item">
+    {{if .ImageURL}}<img src="{{.ImageURL}}" alt="Post image" style="max-width:100%;max-height:200px;border-radius:6px;margin-bottom:8px;object-fit:cover;">{{end}}
+    <div class="post-preview">{{nl2br .Body}}</div>
+    <div class="meta">Added {{formatTimeIST .CreatedAt}}{{if .ImageURL}} — <a href="{{.ImageURL}}" target="_blank">Image</a>{{end}}</div>
+  </div>
+  {{end}}
+</div>
+{{end}}
+
+<div class="card">
+  <h2>Published Posts</h2>
+  {{if $published}}
+    {{range $published}}
+    <div class="draft-item">
+      <div><a href="{{.PostURL}}" target="_blank">View on LinkedIn →</a></div>
+      <div class="meta">Posted {{formatTimeIST .PostedAt}}</div>
+    </div>
+    {{end}}
+  {{else}}
+    <div class="empty">No posts published yet through this agent.</div>
+  {{end}}
+</div>
+{{end}}

@@ -1,0 +1,80 @@
+{{define "scheduled"}}
+<div class="card">
+  <h2>📅 Scheduled Posts <span style="font-size:13px;color:var(--text-dim);font-weight:400;">({{len .Scheduled}} total)</span></h2>
+  {{if .Scheduled}}
+    {{range $d := .Scheduled}}
+    <div class="draft-row" style="border-left:3px solid var(--blue);padding:16px;margin-bottom:12px;background:var(--tint-blue);border-radius:8px;">
+      <div style="font-size:14px;font-weight:600;color:var(--text);">
+        <a href="/drafts/{{$d.ID}}" style="color:inherit;text-decoration:none;">{{if $d.Title}}{{$d.Title}}{{else}}{{truncate $d.Body 60}}{{end}}</a>
+      </div>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">{{truncate $d.Body 150}}</div>
+      <div style="font-size:12px;color:var(--blue);margin-top:6px;">
+        ⏳ <strong>{{formatScheduled $d.ScheduledFor "Asia/Kolkata"}}</strong>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
+        <form method="POST" action="/drafts/{{$d.ID}}/cancel-schedule" style="display:inline;" data-confirm="Cancel this schedule?">
+          <button type="submit" class="btn btn-sm" style="color:var(--red-t);border:1px solid var(--red-t);background:transparent;cursor:pointer;padding:5px 12px;border-radius:4px;font-size:12px;">Cancel Schedule</button>
+        </form>
+        <form method="POST" action="/drafts/{{$d.ID}}/approve" style="display:inline;" data-confirm="Publish this post to LinkedIn right now?">
+          <button type="submit" class="btn btn-sm btn-success" style="font-size:12px;">Publish Now</button>
+        </form>
+        <button class="btn btn-sm btn-outline" style="font-size:12px;" onclick="toggleCollapse('resched-{{$d.ID}}')">Change Time</button>
+        <a href="/drafts/{{$d.ID}}" class="btn btn-sm btn-outline" style="font-size:12px;">Preview</a>
+      </div>
+      <div id="resched-{{$d.ID}}" class="collapse" style="padding-top:10px;border-top:1px solid var(--border);">
+        <form method="POST" action="/drafts/{{$d.ID}}/schedule" style="display:flex;gap:8px;align-items:flex-end;">
+          <div>
+            <label style="display:block;font-size:11px;color:var(--text-muted);margin-bottom:2px;">New Date & Time (IST)</label>
+            <input type="datetime-local" name="datetime" required style="padding:6px 8px;border:2px solid var(--border);border-radius:4px;font-size:13px;">
+          </div>
+          <input type="hidden" name="tz" value="Asia/Kolkata">
+          <button type="submit" class="btn btn-sm btn-primary" style="font-size:12px;">Update Schedule</button>
+        </form>
+      </div>
+    </div>
+    {{end}}
+  {{else}}
+    <div class="empty">No scheduled posts. Approve a draft and set a schedule time.</div>
+  {{end}}
+</div>
+
+<div class="card">
+  <h2>✅ Approved (Unscheduled) <span style="font-size:13px;color:var(--text-dim);font-weight:400;">({{len .Approved}} total)</span></h2>
+  {{if .Approved}}
+    {{range $d := .Approved}}
+    <div class="draft-row" style="border-left:3px solid var(--green-t);padding:16px;margin-bottom:12px;background:var(--tint-green);border-radius:8px;">
+      <div style="font-size:14px;font-weight:600;color:var(--text);">
+        <a href="/drafts/{{$d.ID}}" style="color:inherit;text-decoration:none;">{{if $d.Title}}{{$d.Title}}{{else}}{{truncate $d.Body 60}}{{end}}</a>
+      </div>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">{{truncate $d.Body 150}}</div>
+      <div style="font-size:12px;color:var(--green-t);margin-top:6px;">
+        ✅ Approved — will publish on next cycle
+      </div>
+      <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
+        <form method="POST" action="/drafts/{{$d.ID}}/approve" style="display:inline;" data-confirm="Publish this post to LinkedIn right now?">
+          <button type="submit" class="btn btn-sm btn-success" style="font-size:12px;">Publish Now</button>
+        </form>
+        <button class="btn btn-sm btn-outline" style="font-size:12px;" onclick="toggleCollapse('resched-{{$d.ID}}')">Schedule</button>
+        <form method="POST" action="/drafts/{{$d.ID}}/reject" style="display:inline;" data-confirm="Reject this draft?">
+          <button type="submit" class="btn btn-sm" style="color:var(--red-t);border:1px solid var(--red-t);background:transparent;cursor:pointer;padding:5px 12px;border-radius:4px;font-size:12px;">Reject</button>
+        </form>
+        <a href="/drafts/{{$d.ID}}" class="btn btn-sm btn-outline" style="font-size:12px;">Preview</a>
+      </div>
+      <div id="resched-{{$d.ID}}" class="collapse" style="padding-top:10px;border-top:1px solid var(--border);">
+        <form method="POST" action="/drafts/{{$d.ID}}/schedule" style="display:flex;gap:8px;align-items:flex-end;">
+          <div>
+            <label style="display:block;font-size:11px;color:var(--text-muted);margin-bottom:2px;">Date & Time (IST)</label>
+            <input type="datetime-local" name="datetime" required style="padding:6px 8px;border:2px solid var(--border);border-radius:4px;font-size:13px;">
+          </div>
+          <input type="hidden" name="tz" value="Asia/Kolkata">
+          <button type="submit" class="btn btn-sm btn-primary" style="font-size:12px;">Set Schedule</button>
+        </form>
+      </div>
+    </div>
+    {{end}}
+  {{else}}
+    <div class="empty">No approved posts waiting for publication.</div>
+  {{end}}
+</div>
+
+{{end}}

@@ -1,0 +1,45 @@
+{{define "layout.html"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{.Title}} — LinkedIn Post Agent</title>
+<script>
+// Set theme before first paint to avoid a flash of the wrong theme.
+(function () {
+  var t = localStorage.getItem('pa-theme');
+  if (!t) {
+    t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+  }
+  // ?theme=dark|light overrides (handy for testing/sharing a specific look)
+  var q = new URLSearchParams(location.search).get('theme');
+  if (q === 'dark' || q === 'light') t = q;
+  document.documentElement.setAttribute('data-theme', t);
+})();
+</script>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<nav class="nav">
+  <h1><a href="/">PostAgent</a></h1>
+  <a href="/" {{if eq .Page "dashboard"}}class="active"{{end}}>Dashboard</a>
+  <a href="/drafts" {{if eq .Page "drafts"}}class="active"{{end}}>Drafts</a>
+  <a href="/scheduled" {{if eq .Page "scheduled"}}class="active"{{end}}>Scheduled</a>
+  <a href="/topics" {{if eq .Page "topics"}}class="active"{{end}}>Topics</a>
+  <a href="/history" {{if eq .Page "history"}}class="active"{{end}}>History</a>
+  <a href="/cycles" {{if eq .Page "cycles"}}class="active"{{end}}>Cycles</a>
+  <form method="POST" action="/run" style="display:inline;margin-left:auto;" data-confirm="Run a full agent cycle now? This researches topics and generates posts.">
+    <button type="submit" class="btn btn-primary btn-sm">⚡ Run Cycle</button>
+  </form>
+  <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark/light theme" title="Toggle dark/light theme">
+    <span class="theme-icon-dark">🌙</span><span class="theme-icon-light">☀️</span>
+  </button>
+</nav>
+<div class="container">
+  {{if .Error}}<div class="alert alert-error">⚠️ {{.Error}}</div>{{end}}
+  {{if .Success}}<div class="alert alert-success">✅ {{.Success}}</div>{{end}}
+  {{.Content}}
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>{{end}}

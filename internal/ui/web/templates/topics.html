@@ -1,0 +1,112 @@
+{{define "topics"}}
+{{$data := .}}
+{{$topics := index $data "Topics"}}
+{{$searchErr := index $data "SearchError"}}
+{{$searchQ := index $data "SearchQuery"}}
+{{$searchResult := index $data "SearchResult"}}
+
+<div class="loading-overlay" id="loading-overlay">
+  <div class="spinner"></div>
+  <div class="loading-text">Generating topic ideas with AI...</div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <span class="card-icon">🤖</span>
+    <h2>Generate Topic Ideas</h2>
+  </div>
+  <p style="font-size:13px;color:var(--text-dim);margin-bottom:12px;">Describe what you want to write about. The AI will suggest topics tailored to your style.</p>
+  <form method="GET" action="/topics/search" onsubmit="showLoading()">
+    <div class="search-group">
+      <input type="text" name="q" value="{{$searchQ}}" placeholder="e.g. security risks in AI, remote team culture, productivity tips..."
+             autocomplete="off">
+      <button type="submit" class="btn btn-primary" id="search-btn">Generate Ideas</button>
+    </div>
+  </form>
+
+  {{if $searchErr}}
+  <div style="margin-top:16px;" class="alert alert-error">{{$searchErr}}</div>
+  {{end}}
+
+  {{if $searchResult}}
+  <div style="margin-top:20px;">
+    <div class="card-header">
+      <span class="card-icon">✨</span>
+      <h2>Suggested Topics</h2>
+    </div>
+    {{range $searchResult}}
+    <div class="idea-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+        <div style="flex:1;">
+          <div class="title">{{.Title}}</div>
+          <div class="hook">{{.Hook}}</div>
+          <div class="explanation">{{.Explanation}}</div>
+        </div>
+        <form method="POST" action="/topics/add" style="flex-shrink:0;padding-top:2px;">
+          <input type="hidden" name="title" value="{{.Title}}">
+          <input type="hidden" name="summary" value="{{.Hook}} {{.Explanation}}">
+          <button type="submit" class="btn btn-success btn-sm">+ Add</button>
+        </form>
+      </div>
+    </div>
+    {{end}}
+  </div>
+  {{end}}
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <span class="card-icon">✏️</span>
+    <h2>Or Add Manually</h2>
+  </div>
+  <form method="POST" action="/topics/add">
+    <div class="search-group">
+      <input type="text" name="title" placeholder="Enter a topic title..." value="" required>
+      <button type="submit" class="btn btn-primary">Add Topic</button>
+    </div>
+  </form>
+</div>
+
+{{if $topics}}
+<div class="card">
+  <div class="card-header">
+    <span class="card-icon">📋</span>
+    <h2>Your Topics ({{len $topics}})</h2>
+  </div>
+  <div class="scroll-area">
+  {{range $topics}}
+  <div class="draft-item">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <strong>{{.Title}}</strong>
+        <div style="margin-top:4px;">
+          {{if .Used}}<span class="tag tag-used">used</span>{{end}}
+          {{if .Source}}<span class="tag tag-{{.Source}}">{{.Source}}</span>{{end}}
+        </div>
+        <div class="meta">Added {{formatTimeIST .CreatedAt}}</div>
+      </div>
+      <form method="POST" action="/topics/{{.ID}}/delete" style="display:inline;" data-confirm="Delete this topic?">
+        <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+      </form>
+    </div>
+  </div>
+  {{end}}
+  </div>
+</div>
+{{else}}
+<div class="card">
+  <div class="card-header">
+    <span class="card-icon">📋</span>
+    <h2>Your Topics</h2>
+  </div>
+  <div class="empty">No topics yet. Generate ideas above or add one manually.</div>
+</div>
+{{end}}
+
+<script>
+function showLoading() {
+  document.getElementById('loading-overlay').classList.add('active');
+  document.getElementById('search-btn').disabled = true;
+}
+</script>
+{{end}}

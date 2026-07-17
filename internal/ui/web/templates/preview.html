@@ -1,0 +1,189 @@
+{{define "preview"}}
+{{$data := .}}
+{{$draft := index $data "Draft"}}
+{{$topic := index $data "Topic"}}
+
+{{$title := $draft.Title}}
+{{if not $title}}{{if $topic}}{{$title = $topic.Title}}{{end}}{{end}}
+
+<div class="card">
+  <div style="display:flex;gap:20px;margin-bottom:16px;">
+    {{if $title}}
+    <div class="preview-avatar" style="flex-shrink:0;width:120px;height:120px;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,0.3);text-align:center;padding:12px;box-sizing:border-box;font-size:15px;font-weight:700;line-height:1.3;">
+      <span style="font-size:40px;margin-bottom:6px;">💡</span>
+      {{$title}}
+    </div>
+    {{end}}
+    <div style="flex:1;">
+      <h2 style="margin-bottom:4px;">{{if $title}}{{$title}}{{else}}Post Preview{{end}}</h2>
+      {{if $topic}}
+      <div style="font-size:13px;color:var(--text-dim);margin-bottom:12px;">
+        Based on topic: <a href="{{$topic.URL}}" target="_blank">{{$topic.Title}}</a>
+      </div>
+      {{end}}
+    </div>
+  </div>
+
+  <div class="post-preview">{{nl2br $draft.Body}}</div>
+
+  {{if $draft.Hashtags}}
+  <div class="hashtags">{{join $draft.Hashtags " "}}</div>
+  {{end}}
+
+  {{if $draft.Media}}
+  <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
+    <strong>Media:</strong> {{$draft.Media.Type}}
+    {{if $draft.Media.SourceURL}} — <a href="{{$draft.Media.SourceURL}}" target="_blank">{{$draft.Media.SourceURL}}</a>{{end}}
+  </div>
+  {{end}}
+</div>
+
+<div class="card">
+  <h2>Actions</h2>
+
+  {{if eq $draft.Status "approved"}}
+    {{if $draft.ScheduledFor}}
+    <div style="font-size:13px;color:var(--blue);margin-bottom:12px;">
+      ⏳ Scheduled for: <strong>{{formatScheduled $draft.ScheduledFor "Asia/Kolkata"}}</strong>
+    </div>
+    <form method="POST" action="/drafts/{{$draft.ID}}/cancel-schedule" style="display:inline;">
+      <button type="submit" class="btn btn-sm" style="color:var(--red-t);border:1px solid var(--red-t);background:transparent;cursor:pointer;padding:6px 14px;border-radius:6px;font-size:13px;">Cancel Schedule</button>
+    </form>
+    {{else}}
+    <div style="font-size:13px;color:var(--green-t);margin-bottom:12px;">✅ Approved — will publish on next cycle</div>
+    {{end}}
+  {{else if eq $draft.Status "published"}}
+    <div style="font-size:13px;color:var(--green-t);margin-bottom:12px;">✅ Published</div>
+  {{else if eq $draft.Status "rejected"}}
+    <div style="font-size:13px;color:var(--red-t);margin-bottom:12px;">❌ Rejected</div>
+  {{else}}
+    <button class="btn btn-success" onclick="showApproveModal()">Approve</button>
+    <form method="POST" action="/drafts/{{$draft.ID}}/reject" style="display:inline;" data-confirm="Reject this draft?">
+      <button type="submit" class="btn btn-danger">Reject</button>
+    </form>
+  {{end}}
+
+  <a href="/drafts" class="btn btn-outline">Back to Drafts</a>
+</div>
+
+{{if $draft.ScheduledFor}}
+<div class="card" style="border-left:3px solid var(--blue);">
+  <div style="font-size:13px;color:var(--text);">
+    ⏳ Scheduled for <strong>{{formatScheduled $draft.ScheduledFor "Asia/Kolkata"}}</strong>
+    — auto-publishes at that time.
+  </div>
+  <div style="margin-top:8px;">
+    <form method="POST" action="/drafts/{{$draft.ID}}/cancel-schedule" style="display:inline;">
+      <button type="submit" class="btn btn-sm" style="color:var(--red-t);border:1px solid var(--red-t);background:transparent;cursor:pointer;padding:5px 12px;border-radius:4px;font-size:12px;">Cancel Schedule</button>
+    </form>
+    <form method="POST" action="/drafts/{{$draft.ID}}/approve" style="display:inline;margin-left:6px;" data-confirm="Publish this post to LinkedIn right now?">
+      <button type="submit" class="btn btn-sm btn-success" style="font-size:12px;">Publish Now</button>
+    </form>
+  </div>
+</div>
+{{end}}
+
+{{if and (ne $draft.Status "published") (ne $draft.Status "rejected") (ne $draft.Status "approved")}}
+<div class="card">
+  <h2>Schedule Post</h2>
+  <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">
+    Choose a date and time (IST) to auto-publish this post.
+  </div>
+  <form method="POST" action="/drafts/{{$draft.ID}}/schedule" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
+    <div style="flex:1;min-width:200px;">
+      <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:4px;">Date & Time (IST)</label>
+      <input type="datetime-local" name="datetime" required style="width:100%;padding:8px 10px;border:2px solid var(--border);border-radius:6px;font-size:14px;box-sizing:border-box;">
+    </div>
+    <input type="hidden" name="tz" value="Asia/Kolkata">
+    <button type="submit" class="btn btn-primary">Approve & Schedule</button>
+  </form>
+</div>
+{{end}}
+
+<div class="card">
+  <h2>Edit Body</h2>
+  <textarea class="edit-area" id="edit-body">{{$draft.Body}}</textarea>
+  <div style="margin-top:8px;">
+    <button class="btn btn-primary" id="save-edit-btn" onclick="saveEdit()">Save Changes</button>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Set Media</h2>
+  {{if and $draft.Media $draft.Media.SourceURL}}
+  <div style="margin-bottom:12px;">
+    <img src="{{$draft.Media.SourceURL}}" alt="media preview" class="media-preview-img">
+  </div>
+  {{end}}
+  <form method="POST" action="/drafts/{{$draft.ID}}/media" enctype="multipart/form-data">
+    <select name="type" style="padding:6px 10px;border:1px solid var(--border);border-radius:4px;margin-right:8px;">
+      <option value="image">Image</option>
+      <option value="pdf">PDF</option>
+      <option value="none">None</option>
+    </select>
+    <input type="file" name="file" accept="image/*" style="margin-right:8px;">
+    <button type="submit" class="btn btn-primary btn-sm">Upload &amp; Set</button>
+    <div style="margin-top:10px;color:var(--text-muted);font-size:13px;">Or paste a <strong>public</strong> image URL (private links like ChatGPT/Google Drive won't work):</div>
+    <input type="text" name="url" placeholder="https://... public image URL" style="padding:6px 10px;border:1px solid var(--border);border-radius:4px;width:320px;margin-top:6px;">
+  </form>
+</div>
+
+<div id="approveModal" class="modal-backdrop">
+  <div class="modal-dialog">
+    <div style="font-size:18px;font-weight:700;margin-bottom:8px;">Approve Post</div>
+    <div style="font-size:13px;color:var(--text-muted);margin-bottom:20px;">Publish now or schedule for later?</div>
+    <form method="POST" action="/drafts/{{$draft.ID}}/approve" style="margin-bottom:10px;">
+      <button type="submit" class="btn btn-success" style="width:100%;padding:12px;font-size:15px;">Publish Now</button>
+    </form>
+    <button class="btn btn-primary" style="width:100%;padding:12px;font-size:15px;" onclick="showSchedule()">Schedule for Later</button>
+    <div id="scheduleInline" style="display:none;margin-top:16px;padding-top:16px;border-top:1px solid var(--border);">
+      <form method="POST" action="/drafts/{{$draft.ID}}/schedule">
+        <div style="margin-bottom:10px;">
+          <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:4px;text-align:left;">Date & Time (IST)</label>
+          <input type="datetime-local" name="datetime" required style="width:100%;padding:10px;border:2px solid var(--border);border-radius:6px;font-size:14px;box-sizing:border-box;">
+        </div>
+        <input type="hidden" name="tz" value="Asia/Kolkata">
+        <button type="submit" class="btn btn-primary" style="width:100%;padding:10px;font-size:14px;">Confirm Schedule</button>
+      </form>
+    </div>
+    <button onclick="closeApproveModal()" style="margin-top:12px;background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:13px;">Cancel</button>
+  </div>
+</div>
+
+<script>
+function showApproveModal() {
+  document.getElementById('scheduleInline').style.display = 'none';
+  document.getElementById('approveModal').classList.add('show');
+}
+function closeApproveModal() {
+  document.getElementById('approveModal').classList.remove('show');
+}
+function showSchedule() {
+  document.getElementById('scheduleInline').style.display = 'block';
+}
+// Close modal on backdrop click or Escape
+document.getElementById('approveModal').addEventListener('click', function(e) {
+  if (e.target === this) closeApproveModal();
+});
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeApproveModal();
+});
+function saveEdit() {
+  var btn = document.getElementById('save-edit-btn');
+  btn.disabled = true; btn.classList.add('btn-loading');
+  var body = document.getElementById('edit-body').value;
+  fetch('/drafts/{{$draft.ID}}/edit', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({body: body})
+  }).then(function(r) {
+    if (r.ok) showToast('Changes saved', 'success');
+    else showToast('Failed to save', 'error');
+  }).catch(function() {
+    showToast('Failed to save', 'error');
+  }).finally(function() {
+    btn.disabled = false; btn.classList.remove('btn-loading');
+  });
+}
+</script>
+{{end}}

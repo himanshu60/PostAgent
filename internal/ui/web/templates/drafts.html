@@ -1,0 +1,37 @@
+{{define "drafts"}}
+<div class="card">
+  <h2>All Drafts</h2>
+  {{$drafts := .}}
+  {{if $drafts}}
+    {{range $drafts}}
+    <div class="draft-item">
+      <div><a href="/drafts/{{.ID}}">{{if .Title}}<strong>{{.Title}}</strong> — {{end}}{{truncate .Body 120}}</a></div>
+      <div class="meta">
+        <span class="tag tag-{{.Status}}">{{.Status}}</span>
+        {{if .ScheduledFor}}<span class="tag tag-scheduled">⏰ {{formatScheduled .ScheduledFor "Asia/Kolkata"}}</span>{{end}}
+        — Hashtags: {{len .Hashtags}}
+        — Created: {{formatTimeIST .CreatedAt}}
+        {{if .Media}} — Media: {{.Media.Type}}{{end}}
+      </div>
+      <div class="actions">
+        <a href="/drafts/{{.ID}}" class="btn btn-outline btn-sm">Preview</a>
+        {{if eq .Status "published"}}
+          <span style="font-size:12px;color:var(--purple);">✅ Live on LinkedIn</span>
+        {{else if eq .Status "rejected"}}
+          <span style="font-size:12px;color:var(--red-t);">Rejected</span>
+        {{else}}
+          <form method="POST" action="/drafts/{{.ID}}/approve" style="display:inline;" data-confirm="Publish this post to LinkedIn now?">
+            <button type="submit" class="btn btn-success btn-sm">Publish Now</button>
+          </form>
+          <form method="POST" action="/drafts/{{.ID}}/reject" style="display:inline;" data-confirm="Reject this draft?">
+            <button type="submit" class="btn btn-danger btn-sm">Reject</button>
+          </form>
+        {{end}}
+      </div>
+    </div>
+    {{end}}
+  {{else}}
+    <div class="empty">No drafts found.</div>
+  {{end}}
+</div>
+{{end}}
