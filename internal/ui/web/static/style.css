@@ -163,9 +163,10 @@ a:hover { text-decoration: underline; }
 }
 .nav h1 a::before { content: "◆ "; -webkit-text-fill-color: var(--blue); font-size: 13px; }
 .nav h1 a:hover { text-decoration: none; }
-.nav a { color: var(--text-muted); font-size: 14px; font-weight: 600; margin-right: 22px; padding: 18px 2px; position: relative; }
-.nav a:hover { color: var(--blue); text-decoration: none; }
-.nav a::after {
+.nav-links { display: flex; align-items: center; flex: 1; }
+.nav-links > a { color: var(--text-muted); font-size: 14px; font-weight: 600; margin-right: 22px; padding: 18px 2px; position: relative; }
+.nav-links > a:hover { color: var(--blue); text-decoration: none; }
+.nav-links > a::after {
   content: "";
   position: absolute; left: 0; right: 0; bottom: 0; height: 3px;
   background: linear-gradient(90deg, var(--blue), var(--purple));
@@ -173,8 +174,23 @@ a:hover { text-decoration: underline; }
   transform: scaleX(0);
   transition: transform 0.25s var(--ease-spring);
 }
-.nav a:hover::after, .nav .active::after { transform: scaleX(1); }
-.nav .active { color: var(--blue); }
+.nav-links > a:hover::after, .nav-links .active::after { transform: scaleX(1); }
+.nav-links .active { color: var(--blue); }
+.nav-run { display: inline; margin-left: auto; }
+
+/* Hamburger (hidden on desktop) */
+.nav-toggle {
+  display: none;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  width: 40px; height: 38px; margin-left: auto; margin-right: 10px;
+  cursor: pointer; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.nav-toggle:hover { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
+.nav-toggle-bar { display: block; width: 18px; height: 2px; border-radius: 2px; background: var(--text); transition: transform 0.25s var(--ease-spring), opacity 0.2s ease; }
+.nav-toggle[aria-expanded="true"] .nav-toggle-bar:nth-child(1) { transform: translateY(6px) rotate(45deg); }
+.nav-toggle[aria-expanded="true"] .nav-toggle-bar:nth-child(2) { opacity: 0; }
+.nav-toggle[aria-expanded="true"] .nav-toggle-bar:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
 
 /* Theme toggle */
 .theme-toggle {
@@ -451,4 +467,38 @@ input[type="text"]:focus, input[type="datetime-local"]:focus, textarea:focus, se
   html { scroll-behavior: auto; }
 }
 
-@media (max-width: 700px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } .search-group { flex-direction: column; } }
+/* ===== Responsive: collapse nav into a dropdown ===== */
+@media (max-width: 820px) {
+  .nav { padding: 0 16px; }
+  .nav h1 { margin-right: 0; }
+  .nav-toggle { display: flex; }
+  .nav-links {
+    position: absolute; top: 58px; left: 0; right: 0;
+    flex-direction: column; align-items: stretch; flex: none;
+    background: var(--surface-solid);
+    backdrop-filter: blur(18px) saturate(1.4);
+    -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    border-bottom: 1px solid var(--border);
+    box-shadow: var(--shadow-md);
+    padding: 8px 16px 16px;
+    max-height: 0; overflow: hidden; opacity: 0;
+    transform: translateY(-8px);
+    transition: max-height 0.32s ease, opacity 0.28s ease, transform 0.28s ease;
+    pointer-events: none;
+  }
+  .nav-links.open { max-height: 460px; opacity: 1; transform: translateY(0); pointer-events: auto; }
+  .nav-links > a { margin-right: 0; padding: 13px 6px; border-bottom: 1px solid var(--border); }
+  .nav-links > a::after { display: none; }
+  .nav-links .active { background: var(--tint-blue); border-radius: 8px; }
+  .nav-run { margin-left: 0; margin-top: 12px; }
+  .nav-run .btn { width: 100%; }
+}
+
+@media (max-width: 700px) {
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  .search-group { flex-direction: column; }
+  .container { padding: 20px 16px; }
+  /* Generate-from-topic form stacks its button below the input */
+  #genForm { flex-wrap: wrap; }
+  #genForm .btn { width: 100%; }
+}

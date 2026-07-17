@@ -22,15 +22,20 @@
 <body>
 <nav class="nav">
   <h1><a href="/">PostAgent</a></h1>
-  <a href="/" {{if eq .Page "dashboard"}}class="active"{{end}}>Dashboard</a>
-  <a href="/drafts" {{if eq .Page "drafts"}}class="active"{{end}}>Drafts</a>
-  <a href="/scheduled" {{if eq .Page "scheduled"}}class="active"{{end}}>Scheduled</a>
-  <a href="/topics" {{if eq .Page "topics"}}class="active"{{end}}>Topics</a>
-  <a href="/history" {{if eq .Page "history"}}class="active"{{end}}>History</a>
-  <a href="/cycles" {{if eq .Page "cycles"}}class="active"{{end}}>Cycles</a>
-  <form method="POST" action="/run" style="display:inline;margin-left:auto;" data-confirm="Run a full agent cycle now? This researches topics and generates posts.">
-    <button type="submit" class="btn btn-primary btn-sm">⚡ Run Cycle</button>
-  </form>
+  <button id="nav-toggle" class="nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">
+    <span class="nav-toggle-bar"></span><span class="nav-toggle-bar"></span><span class="nav-toggle-bar"></span>
+  </button>
+  <div class="nav-links" id="nav-links">
+    <a href="/" {{if eq .Page "dashboard"}}class="active"{{end}}>Dashboard</a>
+    <a href="/drafts" {{if eq .Page "drafts"}}class="active"{{end}}>Drafts</a>
+    <a href="/scheduled" {{if eq .Page "scheduled"}}class="active"{{end}}>Scheduled</a>
+    <a href="/topics" {{if eq .Page "topics"}}class="active"{{end}}>Topics</a>
+    <a href="/history" {{if eq .Page "history"}}class="active"{{end}}>History</a>
+    <a href="/cycles" {{if eq .Page "cycles"}}class="active"{{end}}>Cycles</a>
+    <form method="POST" action="/run" class="nav-run" data-confirm="Run a full agent cycle now? This researches topics and generates posts.">
+      <button type="submit" class="btn btn-primary btn-sm">⚡ Run Cycle</button>
+    </form>
+  </div>
   <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark/light theme" title="Toggle dark/light theme">
     <span class="theme-icon-dark">🌙</span><span class="theme-icon-light">☀️</span>
   </button>

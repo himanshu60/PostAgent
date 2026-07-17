@@ -89,6 +89,24 @@
     if (el) el.classList.toggle('open');
   };
 
+  /* ---- Mobile nav toggle ---- */
+  var navToggle = document.getElementById('nav-toggle');
+  var navLinks = document.getElementById('nav-links');
+  if (navToggle && navLinks) {
+    navToggle.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var open = navLinks.classList.toggle('open');
+      navToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+    // Tap outside closes the menu.
+    document.addEventListener('click', function (e) {
+      if (navLinks.classList.contains('open') && !navLinks.contains(e.target) && e.target !== navToggle) {
+        navLinks.classList.remove('open');
+        navToggle.setAttribute('aria-expanded', 'false');
+      }
+    });
+  }
+
   /* ---- Dark/light theme toggle ---- */
   var themeBtn = document.getElementById('theme-toggle');
   if (themeBtn) {
