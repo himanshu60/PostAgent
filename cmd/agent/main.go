@@ -28,7 +28,14 @@ func main() {
 	auth := flag.Bool("auth", false, "Run LinkedIn OAuth2 flow")
 	code := flag.String("code", "", "OAuth2 authorization code (used with -auth)")
 	serve := flag.Bool("serve", false, "Start web UI server")
-	addr := flag.String("addr", ":8081", "Web UI server address")
+	// Default the listen address to $PORT when set (Render, Railway, Koyeb, Fly,
+	// Cloud Run all inject it), falling back to :8081 for local dev. An explicit
+	// -addr flag still overrides both.
+	defaultAddr := ":8081"
+	if p := os.Getenv("PORT"); p != "" {
+		defaultAddr = ":" + p
+	}
+	addr := flag.String("addr", defaultAddr, "Web UI server address (defaults to :$PORT, else :8081)")
 	flag.Parse()
 
 	cfg, err := config.Load()

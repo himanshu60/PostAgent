@@ -15,9 +15,10 @@ WORKDIR /app
 
 COPY --from=builder /agent .
 
-# Runs the web UI *and* the auto-publish scheduler together on :8081.
-# Config comes from real environment variables (e.g. docker --env-file),
-# so we deliberately do NOT bake .env into the image.
+# Runs the web UI *and* the auto-publish scheduler together.
+# The server listens on $PORT if set (Render/Railway/Koyeb/Fly), else :8081.
+# Config comes from real environment variables (e.g. docker --env-file or the
+# platform dashboard), so we deliberately do NOT bake .env into the image.
 EXPOSE 8081
 ENTRYPOINT ["/app/agent"]
-CMD ["-serve", "-addr=:8081"]
+CMD ["-serve"]
