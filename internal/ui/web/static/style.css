@@ -451,6 +451,18 @@ input[type="text"]:focus, input[type="datetime-local"]:focus, textarea:focus, se
 /* ===== Media preview ===== */
 .media-preview-img { max-width: 320px; max-height: 240px; border-radius: 14px; border: 1px solid var(--border); transition: transform 0.3s var(--ease-spring), box-shadow 0.3s ease; }
 .media-preview-img:hover { transform: scale(1.04) rotate(0.5deg); box-shadow: var(--shadow-lg); }
+/* Skeleton shimmer while a slow generated image is loading */
+.media-preview-img.media-loading {
+  min-width: 320px; min-height: 200px;
+  background: linear-gradient(90deg, var(--border) 25%, transparent 50%, var(--border) 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+.media-fallback {
+  max-width: 320px; padding: 16px 18px; border-radius: 14px;
+  border: 1px dashed var(--border-strong); background: var(--tint-blue);
+  color: var(--text-muted); font-size: 13px; line-height: 1.5;
+}
 
 /* ===== Skeleton ===== */
 .skeleton { background: linear-gradient(90deg, var(--border) 25%, transparent 50%, var(--border) 75%); background-size: 800px 100%; animation: shimmer 1.4s linear infinite; border-radius: 8px; }

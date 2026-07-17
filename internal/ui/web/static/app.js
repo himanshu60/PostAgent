@@ -89,6 +89,22 @@
     if (el) el.classList.toggle('open');
   };
 
+  /* ---- Graceful media image loading ----
+     Generated images (e.g. Pollinations) render on demand and can be slow or
+     occasionally fail. Show a skeleton while loading and a clean placeholder on
+     error, instead of the browser's broken-image glyph. */
+  document.querySelectorAll('img.media-preview-img').forEach(function (img) {
+    img.loading = 'lazy';
+    if (!img.complete) img.classList.add('media-loading');
+    img.addEventListener('load', function () { img.classList.remove('media-loading'); });
+    img.addEventListener('error', function () {
+      var ph = document.createElement('div');
+      ph.className = 'media-fallback';
+      ph.textContent = 'Preview image is still generating or unavailable — it will still be attached when the post is published.';
+      img.replaceWith(ph);
+    });
+  });
+
   /* ---- Mobile nav toggle ---- */
   var navToggle = document.getElementById('nav-toggle');
   var navLinks = document.getElementById('nav-links');

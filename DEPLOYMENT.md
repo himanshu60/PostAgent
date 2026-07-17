@@ -91,14 +91,16 @@ through an OAuth flow that this app automates.
 On your laptop create `.env.production` (never commit it):
 
 ```dotenv
-# LLM + images
+# LLM (text) — Gemini free tier works fine for text
 LLM_PROVIDER=gemini
 LLM_MODEL=gemini-2.5-flash
 GEMINI_API_KEY=your_gemini_key
 GEMINI_MODEL=gemini-2.5-flash
-IMAGE_PROVIDER=gemini
-GEMINI_IMAGE_MODEL=gemini-2.5-flash-image
-# Optional fallback so throttling doesn't stop generation:
+# Images — MUST be pollinations on the free plan. Gemini/Imagen image models
+# return HTTP 429 (quota limit 0) unless you enable billing on Google Cloud.
+# Pollinations is free, needs no key, and requires no quota.
+IMAGE_PROVIDER=pollinations
+# Optional fallback so throttling doesn't stop text generation:
 # LLM_FALLBACK_PROVIDER=openrouter
 # OPENROUTER_API_KEY=...
 
