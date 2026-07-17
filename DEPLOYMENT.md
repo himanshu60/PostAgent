@@ -1,214 +1,184 @@
-# Deploying PostAgent (free, always-on, auto-publish)
+# Deploying PostAgent — free, always-on, auto-publish (Render)
 
-This guide deploys PostAgent so it **runs 24/7**, generates LinkedIn posts on a
-schedule, and **publishes them automatically** — using only free-tier services.
+This guide deploys PostAgent on **Render's free tier** so it runs 24/7,
+generates posts on a schedule, and **publishes to LinkedIn automatically** —
+at $0/month. It also lists every API and environment variable the app uses.
 
-## How the app runs
+- **Recommended path:** Render (this guide). Simplest — deploy straight from
+  GitHub, no server to manage.
+- **Most robust free path:** an Oracle Cloud Always Free VM (never sleeps, no
+  keep-alive needed). See [§8](#8-alternative-oracle-cloud-always-free-vm).
 
-`agent -serve` starts **two things in one process**:
+---
 
-1. **Web UI** on `:8081` (dashboard, drafts, topics, history).
-2. **Scheduler** — a cron that generates posts before each publish day and, with
-   `AGENT_AUTO_PUBLISH=true`, posts them to LinkedIn at 10:00 AM IST on
-   `AGENT_PUBLISH_DAYS` (default Mon/Wed/Fri).
+## 0. The one Render caveat (and the free fix)
 
-Because the scheduler is *inside* the process, the process must stay running.
-That's why we use an **always-on VM**, not a sleeping free web tier.
+`agent -serve` runs the web UI **and** the auto-publish scheduler in one
+process, so the process must stay alive. Render's **free** web service **sleeps
+after 15 minutes with no traffic** — which would pause the scheduler and miss
+scheduled posts.
 
-## Why an Oracle Cloud "Always Free" VM
+**Free fix:** a free [UptimeRobot](https://uptimerobot.com) monitor pings the
+app every 5 minutes so it never sleeps (§6). That keeps the whole thing free
+and always-on. (If you'd rather not rely on that, use the Oracle VM in §7, or
+Render's paid Starter plan at ~$7/mo which never sleeps.)
 
-| Option | Always-on? | Truly free? | Verdict |
+---
+
+## 1. APIs used and what each is for
+
+| API / service | Used for | Required? | Where to get it |
 |---|---|---|---|
-| **Oracle Cloud Always Free VM** | ✅ yes | ✅ free forever | **Recommended** |
-| Google Cloud `e2-micro` free VM | ✅ yes | ✅ (1 in us-regions) | Good alternative |
-| Render free web service | ❌ sleeps after 15 min | ✅ | Scheduler stops → misses posts |
-| Railway | ✅ | ❌ trial credit only | Not free long-term |
-| Cloud Run | scales to zero | ✅ | Cron won't fire unless min-instances≥1 (not free) |
-
-We deploy the Docker container on a free VM and keep it alive with Docker's
-restart policy.
-
----
-
-## Step 1 — MongoDB Atlas (free M0 cluster)
-
-1. Create an account at <https://www.mongodb.com/cloud/atlas/register>.
-2. **Build a Database → M0 (Free)**. Pick a region near your VM.
-3. **Database Access →** add a user (username + password). Save them.
-4. **Network Access →** add IP `0.0.0.0/0` (allow from anywhere) — or, more
-   securely, add only your VM's public IP after Step 5.
-5. **Connect → Drivers →** copy the connection string. It looks like:
-   ```
-   mongodb+srv://USER:PASSWORD@cluster0.xxxx.mongodb.net/?retryWrites=true&w=majority
-   ```
-   This becomes your `MONGO_URI`. (`MONGO_DB` defaults to `linkedin_agent`.)
+| **MongoDB Atlas** | Stores topics, drafts, published posts, cycles | ✅ Yes | <https://www.mongodb.com/cloud/atlas/register> |
+| **Google Gemini API** | Writes the post text (LLM) | ✅ Yes (if `LLM_PROVIDER=gemini`) | <https://aistudio.google.com/apikey> |
+| **LinkedIn API (OAuth2 + REST)** | Publishes posts + uploads images | ✅ Yes (for publishing) | <https://www.linkedin.com/developers/apps> |
+| **Pollinations.ai** | Generates the post image (free, keyless) | ✅ Yes (default image provider) | *no signup* |
+| OpenRouter | Optional LLM provider / fallback | ⬜ Optional | <https://openrouter.ai/keys> |
+| Ollama | Optional local LLM (self-hosted) | ⬜ Optional | <https://ollama.com> |
+| OpenAI | Optional image provider | ⬜ Optional | <https://platform.openai.com/api-keys> |
+| NewsAPI | Extra trending-topic source | ⬜ Optional | <https://newsapi.org> |
 
 ---
 
-## Step 2 — Gemini API key
+## 2. Complete environment variable reference
 
-Your config uses `LLM_PROVIDER=gemini` and `IMAGE_PROVIDER=gemini`.
+Set these in Render's **Environment** tab (§5). `✱` = required.
 
-1. Go to <https://aistudio.google.com/apikey> → **Create API key**.
-2. Save it as `GEMINI_API_KEY`.
+### LLM (text generation)
+| Variable | Example / default | Notes |
+|---|---|---|
+| `LLM_PROVIDER` | `gemini` | `gemini` \| `openrouter` \| `ollama` |
+| `LLM_MODEL` | `gemini-2.5-flash` | Model for the chosen provider |
+| `GEMINI_API_KEY` ✱ | `AIza...` | Required when provider/fallback is gemini |
+| `GEMINI_MODEL` | `gemini-2.5-flash` | Text model |
+| `LLM_FALLBACK_PROVIDER` | `openrouter` | Auto-retry if primary errors (optional) |
+| `OPENROUTER_API_KEY` | `sk-or-...` | Only if using OpenRouter |
 
-> The free Gemini tier has low rate limits. Set `LLM_FALLBACK_PROVIDER` (e.g.
-> `openrouter` with an `OPENROUTER_API_KEY`) so generation still works if Gemini
-> throttles.
+### Images
+| Variable | Example / default | Notes |
+|---|---|---|
+| `IMAGE_PROVIDER` ✱ | `pollinations` | **Keep `pollinations` on free plans.** `gemini`/`openai` need paid billing (free Gemini image tier returns HTTP 429). |
+| `OPENAI_API_KEY` | `sk-...` | Only if `IMAGE_PROVIDER=openai` |
+
+### Database
+| Variable | Example / default | Notes |
+|---|---|---|
+| `MONGO_URI` ✱ | `mongodb+srv://user:pass@cluster0.xxx.mongodb.net/...` | From Atlas (§3). Required or app won't start. |
+| `MONGO_DB` | `linkedin_agent` | Database name |
+
+### LinkedIn (publishing)
+| Variable | Notes |
+|---|---|
+| `LINKEDIN_CLIENT_ID` ✱ | From your LinkedIn app |
+| `LINKEDIN_CLIENT_SECRET` ✱ | From your LinkedIn app |
+| `LINKEDIN_ACCESS_TOKEN` ✱ | From the OAuth flow (§4) |
+| `LINKEDIN_REFRESH_TOKEN` ✱ | From the OAuth flow (§4) |
+| `LINKEDIN_PERSON_ID` ✱ | From the OAuth flow (§4) |
+| `LINKEDIN_REDIRECT_URI` | `http://localhost:8080/auth/callback` (used during §4) |
+| `LINKEDIN_API_VERSION` | `202506` — **must be a currently-active `YYYYMM`**; expired → `426` error |
+
+### Scheduling & behavior
+| Variable | Default | Notes |
+|---|---|---|
+| `AGENT_AUTO_PUBLISH` | `false` → set **`true`** | Publish without manual review |
+| `AGENT_SCHEDULE` | `CRON_TZ=Asia/Kolkata 0 0 9 * * *` | Daily generate check |
+| `AGENT_PUBLISH_DAYS` | `Mon,Wed,Fri` | Days posts go live (10 AM IST) |
+| `AGENT_TOPICS_COUNT` | `5` | Topics researched per cycle |
+| `BRAND_VOICE_TONE` | `professional` | Writing tone |
+| `BRAND_VOICE_MAX_EMOJI` | `3` | Emoji cap |
+| `BRAND_VOICE_MIN_LINE_BREAKS` | `3` | Minimum spacing |
+| `LOG_LEVEL` | `info` | Log verbosity |
+| `PORT` | *(Render sets this)* | The app auto-binds to it — **don't hard-code** |
 
 ---
 
-## Step 3 — LinkedIn app + OAuth tokens (required for auto-publish)
+## 3. MongoDB Atlas (free M0)
 
-Auto-publish needs a valid LinkedIn access token. LinkedIn tokens are obtained
-through an OAuth flow that this app automates.
+1. Sign up → **Build a Database → M0 (Free)**, pick a region.
+2. **Database Access →** create a user + password.
+3. **Network Access →** add `0.0.0.0/0` (Render's IPs are dynamic on free tier).
+4. **Connect → Drivers →** copy the connection string; that's `MONGO_URI`.
 
-1. Create an app at <https://www.linkedin.com/developers/apps> → **Create app**.
-2. Request the **"Share on LinkedIn"** and **"Sign In with LinkedIn using
-   OpenID Connect"** products (needed for posting + profile ID).
-3. Under **Auth**, copy `Client ID` → `LINKEDIN_CLIENT_ID` and
-   `Client Secret` → `LINKEDIN_CLIENT_SECRET`.
-4. Add an **Authorized redirect URL**. For the token bootstrap below use:
-   `http://localhost:8080/auth/callback` (matches `LINKEDIN_REDIRECT_URI`).
-5. **Get tokens** (do this once, on your laptop, with the values above in a
-   local `.env`):
+---
+
+## 4. LinkedIn app + OAuth tokens
+
+1. Create an app at <https://www.linkedin.com/developers/apps>.
+2. Add products: **"Share on LinkedIn"** and **"Sign In with LinkedIn using
+   OpenID Connect"**.
+3. **Auth →** copy `Client ID`/`Client Secret`; add redirect URL
+   `http://localhost:8080/auth/callback`.
+4. On your laptop, put `LINKEDIN_CLIENT_ID`/`SECRET` + `MONGO_URI` +
+   `GEMINI_API_KEY` in a local `.env`, then:
    ```bash
-   go run ./cmd/agent -auth          # prints an authorization URL
-   # open the URL, authorize, you'll land on the redirect URL with ?code=XXXX
-   go run ./cmd/agent -auth -code=XXXX
+   go run ./cmd/agent -auth            # opens/prints an authorization URL
+   # authorize in the browser → you're redirected to ...?code=XXXX
+   go run ./cmd/agent -auth -code=XXXX # prints the 3 token values
    ```
-   It prints `LINKEDIN_ACCESS_TOKEN`, `LINKEDIN_REFRESH_TOKEN`, and
-   `LINKEDIN_PERSON_ID`. Put all three in your production env (Step 4).
-
-> **API version 426 error:** LinkedIn expires its dated API versions. If logs
-> show `NONEXISTENT_VERSION`, bump `LINKEDIN_API_VERSION` to the current
-> `YYYYMM` (check LinkedIn's API changelog).
+5. Copy the printed `LINKEDIN_ACCESS_TOKEN`, `LINKEDIN_REFRESH_TOKEN`, and
+   `LINKEDIN_PERSON_ID` — you'll paste them into Render (§5).
 
 ---
 
-## Step 4 — Build your production env file
+## 5. Deploy on Render
 
-On your laptop create `.env.production` (never commit it):
-
-```dotenv
-# LLM (text) — Gemini free tier works fine for text
-LLM_PROVIDER=gemini
-LLM_MODEL=gemini-2.5-flash
-GEMINI_API_KEY=your_gemini_key
-GEMINI_MODEL=gemini-2.5-flash
-# Images — MUST be pollinations on the free plan. Gemini/Imagen image models
-# return HTTP 429 (quota limit 0) unless you enable billing on Google Cloud.
-# Pollinations is free, needs no key, and requires no quota.
-IMAGE_PROVIDER=pollinations
-# Optional fallback so throttling doesn't stop text generation:
-# LLM_FALLBACK_PROVIDER=openrouter
-# OPENROUTER_API_KEY=...
-
-# Database
-MONGO_URI=mongodb+srv://USER:PASSWORD@cluster0.xxxx.mongodb.net/?retryWrites=true&w=majority
-MONGO_DB=linkedin_agent
-
-# LinkedIn (from Step 3)
-LINKEDIN_CLIENT_ID=...
-LINKEDIN_CLIENT_SECRET=...
-LINKEDIN_ACCESS_TOKEN=...
-LINKEDIN_REFRESH_TOKEN=...
-LINKEDIN_PERSON_ID=...
-LINKEDIN_API_VERSION=202506
-
-# Auto-publish ON
-AGENT_AUTO_PUBLISH=true
-AGENT_SCHEDULE=CRON_TZ=Asia/Kolkata 0 0 9 * * *
-AGENT_PUBLISH_DAYS=Mon,Wed,Fri
-AGENT_TOPICS_COUNT=5
-
-LOG_LEVEL=info
-```
-
-> **Note on secrets:** `MONGO_URI` is required or the app won't start. Keep this
-> file off git — the repo `.gitignore` already ignores `.env*`.
+1. Push your code to GitHub (already done: `github.com/himanshu60/PostAgent`).
+2. Go to <https://dashboard.render.com> → **New → Web Service** → connect the
+   repo.
+3. Render detects the **Dockerfile** — keep the default. Settings:
+   - **Instance type:** Free
+   - **Region:** closest to your Atlas region
+   - No start command needed (the Dockerfile runs `agent -serve`, which binds
+     `$PORT` automatically).
+4. **Environment →** add every `✱` variable from §2 (and any optional ones).
+   Set `AGENT_AUTO_PUBLISH=true`, `IMAGE_PROVIDER=pollinations`. Do **not** set
+   `PORT` — Render provides it.
+5. **Create Web Service.** Render builds the image and deploys. Watch the logs
+   for `Connected to MongoDB`, `LinkedIn publisher configured`, and
+   `Web UI server starting`.
+6. Your app is live at `https://<your-service>.onrender.com`.
 
 ---
 
-## Step 5 — Create the free VM and deploy
+## 6. Keep it awake (free, so the scheduler runs 24/7)
 
-### 5a. Create the VM
-1. Sign up at <https://www.oracle.com/cloud/free/> → **Always Free**.
-2. **Compute → Instances → Create instance.** Choose an **Always Free-eligible**
-   shape (e.g. `VM.Standard.A1.Flex`, 1 OCPU / 6 GB, or `VM.Standard.E2.1.Micro`).
-   Image: **Ubuntu 22.04**.
-3. Download the SSH private key when prompted.
-4. After it boots, note the **public IP**.
-5. **Networking → open port 8081:** in the instance's subnet **Security List**,
-   add an ingress rule: source `0.0.0.0/0`, TCP, dest port `8081`.
-
-### 5b. Install Docker on the VM
-```bash
-ssh -i your-key.pem ubuntu@<VM_PUBLIC_IP>
-sudo apt-get update && sudo apt-get install -y docker.io
-sudo usermod -aG docker ubuntu && exit   # re-login for group to apply
-```
-
-### 5c. Get the code and env onto the VM
-```bash
-ssh -i your-key.pem ubuntu@<VM_PUBLIC_IP>
-git clone https://github.com/himanshu60/PostAgent.git
-cd PostAgent
-# copy your .env.production up (run this line from your LAPTOP, not the VM):
-#   scp -i your-key.pem .env.production ubuntu@<VM_PUBLIC_IP>:~/PostAgent/.env.production
-```
-
-### 5d. Build and run (auto-restart on crash/reboot)
-```bash
-docker build -t postagent .
-docker run -d --name postagent \
-  --restart unless-stopped \
-  --env-file .env.production \
-  -p 8081:8081 \
-  postagent
-```
-
-The image's default command is `-serve -addr=:8081`, so this one container runs
-**both** the web UI and the auto-publish scheduler. `--restart unless-stopped`
-brings it back after crashes and VM reboots.
+1. Sign up at <https://uptimerobot.com> (free).
+2. **Add New Monitor → HTTP(s)**, URL = your Render URL, interval = **5 min**.
+3. That steady traffic prevents Render's free tier from sleeping, so the
+   scheduler keeps firing and posts publish on time.
 
 ---
 
-## Step 6 — Verify it's working
+## 7. Verify it's working
 
-```bash
-docker logs -f postagent
-```
-You should see `Connected to MongoDB`, `LinkedIn publisher configured`, and
-`Web UI server starting`. Then:
+- Open `https://<your-service>.onrender.com` — dashboard loads.
+- Click **⚡ Run Cycle** → drafts appear (don't wait for the daily cron).
+- Around a publish slot (10 AM IST on a publish day), check logs / the
+  **History** tab for a published post with its LinkedIn URL.
 
-- Open `http://<VM_PUBLIC_IP>:8081` — the dashboard should load.
-- Click **⚡ Run Cycle** to generate drafts immediately (don't wait for the cron).
-- Watch the logs around a scheduled publish time (10:00 AM IST on a publish day)
-  to confirm a post goes out. A successful publish logs the LinkedIn post URL and
-  it appears under **History / Recent Publications**.
+> **If publishing fails with `426 NONEXISTENT_VERSION`:** bump
+> `LINKEDIN_API_VERSION` to the current `YYYYMM` and redeploy.
 
 ---
 
-## Updating later
+## 8. Alternative: Oracle Cloud Always Free VM
 
-```bash
-cd ~/PostAgent && git pull
-docker build -t postagent . && docker rm -f postagent
-docker run -d --name postagent --restart unless-stopped \
-  --env-file .env.production -p 8081:8081 postagent
-```
+If you prefer a server that never sleeps (no keep-alive needed) and is free
+forever:
 
----
+1. Create an **Always Free** VM (Ubuntu 22.04) at
+   <https://www.oracle.com/cloud/free/>; open port `8081` in its Security List.
+2. Install Docker: `sudo apt-get update && sudo apt-get install -y docker.io`.
+3. `git clone` the repo, `scp` up a `.env.production` with the §2 variables.
+4. Build and run always-on:
+   ```bash
+   docker build -t postagent .
+   docker run -d --name postagent --restart unless-stopped \
+     --env-file .env.production -p 8081:8081 postagent
+   ```
+5. Visit `http://<VM_IP>:8081`. Update later with
+   `git pull && docker build -t postagent . && docker rm -f postagent && docker run ...`.
 
-## Recommended hardening (optional)
-
-- **HTTPS + real domain:** put [Caddy](https://caddyserver.com/) in front for
-  automatic TLS, and restrict `:8081` to localhost so only Caddy is public.
-- **Lock the UI down:** the dashboard has no auth. Either keep `:8081` closed in
-  the Security List and reach it via SSH tunnel
-  (`ssh -L 8081:localhost:8081 ...`), or front it with Caddy basic-auth.
-- **Atlas IP allowlist:** replace `0.0.0.0/0` with your VM's public IP.
-- **Token refresh:** LinkedIn access tokens expire (~60 days). The refresh token
-  extends this; if publishing starts failing with auth errors, re-run the Step 3
-  `-auth` flow and update the tokens.
+**Hardening (either platform):** the dashboard has no login — front it with
+Caddy (auto-HTTPS) + basic-auth, and tighten the Atlas IP allowlist once you
+know your egress IP.
