@@ -149,7 +149,7 @@ func Load() (*Config, error) {
 			PersonID:     os.Getenv("LINKEDIN_PERSON_ID"),
 			AccessToken:  os.Getenv("LINKEDIN_ACCESS_TOKEN"),
 			RefreshToken: os.Getenv("LINKEDIN_REFRESH_TOKEN"),
-			APIVersion:   getEnv("LINKEDIN_API_VERSION", "202506"),
+			APIVersion:   getEnv("LINKEDIN_API_VERSION", "202606"),
 		},
 		Image: ImageConfig{
 			Provider:    getEnv("IMAGE_PROVIDER", "pollinations"),

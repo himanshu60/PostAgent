@@ -75,7 +75,7 @@ Set these in Render's **Environment** tab (§5). `✱` = required.
 | `LINKEDIN_REFRESH_TOKEN` ✱ | From the OAuth flow (§4) |
 | `LINKEDIN_PERSON_ID` ✱ | From the OAuth flow (§4) |
 | `LINKEDIN_REDIRECT_URI` | `http://localhost:8080/auth/callback` (used during §4) |
-| `LINKEDIN_API_VERSION` | `202506` — **must be a currently-active `YYYYMM`**; expired → `426` error |
+| `LINKEDIN_API_VERSION` | `202606` — **must be a currently-active `YYYYMM`**; expired → `426` error |
 
 ### Scheduling & behavior
 | Variable | Default | Notes |
