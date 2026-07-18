@@ -32,6 +32,7 @@
     <a href="/topics" {{if eq .Page "topics"}}class="active"{{end}}>Topics</a>
     <a href="/history" {{if eq .Page "history"}}class="active"{{end}}>History</a>
     <a href="/cycles" {{if eq .Page "cycles"}}class="active"{{end}}>Cycles</a>
+    <a href="/guide" {{if eq .Page "guide"}}class="active"{{end}}>Guide</a>
     <form method="POST" action="/run" class="nav-run" data-confirm="Run a full agent cycle now? This researches topics and generates posts.">
       <button type="submit" class="btn btn-primary btn-sm">⚡ Run Cycle</button>
     </form>
@@ -39,6 +40,20 @@
   <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark/light theme" title="Toggle dark/light theme">
     <span class="theme-icon-dark">🌙</span><span class="theme-icon-light">☀️</span>
   </button>
+  {{if .User}}
+  <div class="user-menu">
+    <button type="button" class="user-btn" id="user-btn" aria-haspopup="true" aria-expanded="false" title="{{.User.Name}}">
+      {{if .User.Picture}}<img src="{{.User.Picture}}" alt="" referrerpolicy="no-referrer">{{else}}<span class="user-initial">{{firstChar .User.Name}}</span>{{end}}
+    </button>
+    <div class="user-dropdown" id="user-dropdown">
+      <div class="user-info">
+        <div class="user-name">{{.User.Name}}</div>
+        {{if .User.Email}}<div class="user-email">{{.User.Email}}</div>{{end}}
+      </div>
+      <form method="POST" action="/logout"><button type="submit" class="user-logout">Sign out</button></form>
+    </div>
+  </div>
+  {{end}}
 </nav>
 <div class="container">
   {{if .Error}}<div class="alert alert-error">⚠️ {{.Error}}</div>{{end}}

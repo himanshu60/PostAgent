@@ -200,3 +200,46 @@ func (o *OAuthClient) SetPersonID(ctx context.Context) (string, error) {
 
 	return userInfo.Sub, nil
 }
+
+// LinkedInUserInfo is the OpenID Connect profile returned for a logged-in user.
+type LinkedInUserInfo struct {
+	Sub     string `json:"sub"`
+	Name    string `json:"name"`
+	Email   string `json:"email"`
+	Picture string `json:"picture"`
+}
+
+// FetchUserInfo returns the LinkedIn OpenID profile for an access token. Used by
+// the web "Sign in with LinkedIn" flow to identify the tenant.
+func FetchUserInfo(ctx context.Context, accessToken string) (*LinkedInUserInfo, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		"https://api.linkedin.com/v2/userinfo", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+
+	httpClient := &http.Client{Timeout: 15 * time.Second}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("userinfo failed (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	var info LinkedInUserInfo
+	if err := json.Unmarshal(body, &info); err != nil {
+		return nil, fmt.Errorf("parse userinfo: %w", err)
+	}
+	if info.Sub == "" {
+		return nil, fmt.Errorf("empty sub in userinfo response")
+	}
+	return &info, nil
+}

@@ -29,9 +29,9 @@ func NewOllamaClient(cfg config.OllamaConfig) *OllamaClient {
 }
 
 type ollamaRequest struct {
-	Model    string          `json:"model"`
-	Messages []ollamaMsg     `json:"messages"`
-	Stream   bool            `json:"stream"`
+	Model    string      `json:"model"`
+	Messages []ollamaMsg `json:"messages"`
+	Stream   bool        `json:"stream"`
 }
 
 type ollamaMsg struct {

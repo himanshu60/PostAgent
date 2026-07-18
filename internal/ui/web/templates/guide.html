@@ -1,0 +1,73 @@
+{{define "guide"}}
+<div class="card" style="text-align:center;padding:40px 28px;">
+  <div style="width:56px;height:56px;border-radius:16px;margin:0 auto 18px;background:linear-gradient(135deg,var(--blue),var(--purple));display:flex;align-items:center;justify-content:center;font-size:26px;box-shadow:0 8px 24px rgba(90,90,240,0.4),inset 0 1px 0 rgba(255,255,255,0.3);">📘</div>
+  <h2 style="font-size:26px;letter-spacing:-0.03em;margin-bottom:8px;">How PostAgent works</h2>
+  <p style="color:var(--text-muted);font-size:15px;max-width:620px;margin:0 auto;line-height:1.7;">
+    PostAgent is your AI LinkedIn content studio. It researches what's trending in
+    tech, writes on-brand posts with matching visuals, and publishes them to
+    <strong>your own LinkedIn account</strong> on a schedule you control.
+  </p>
+</div>
+
+<h2 style="font-size:15px;font-weight:650;margin:26px 6px 14px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;">The 3-step flow</h2>
+<div class="grid-3">
+  <div class="card">
+    <div class="card-header"><span class="card-icon">✍️</span><h2>1 · Generate</h2></div>
+    <p style="color:var(--text-muted);font-size:14px;line-height:1.6;">Type a topic (or hit <strong>Run Cycle</strong>) and the agent researches trending developer news, then writes a full LinkedIn post with hashtags and a matching illustration.</p>
+  </div>
+  <div class="card">
+    <div class="card-header"><span class="card-icon">🔎</span><h2>2 · Review</h2></div>
+    <p style="color:var(--text-muted);font-size:14px;line-height:1.6;">Preview each draft, edit the text, swap the image, or reject it. Nothing goes out without your say-so — you're always in control.</p>
+  </div>
+  <div class="card">
+    <div class="card-header"><span class="card-icon">🚀</span><h2>3 · Publish</h2></div>
+    <p style="color:var(--text-muted);font-size:14px;line-height:1.6;">Publish now, or schedule for later. At the scheduled time the post goes live on <strong>your</strong> LinkedIn automatically — image and all.</p>
+  </div>
+</div>
+
+<h2 style="font-size:15px;font-weight:650;margin:26px 6px 14px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;">What you get</h2>
+<div class="grid-2">
+  <div class="card">
+    <div class="card-header"><span class="card-icon">🤖</span><h2>Trend-aware writing</h2></div>
+    <p style="color:var(--text-muted);font-size:14px;line-height:1.6;">Posts are grounded in real, current developer news (Hacker News, InfoQ, GitHub, dev.to and more) — never generic filler. An LLM keeps only topics relevant to a technical audience.</p>
+  </div>
+  <div class="card">
+    <div class="card-header"><span class="card-icon">🎨</span><h2>Auto visuals</h2></div>
+    <p style="color:var(--text-muted);font-size:14px;line-height:1.6;">Every post gets a clean, professional illustration generated to match the topic — attached natively when it publishes to LinkedIn.</p>
+  </div>
+  <div class="card">
+    <div class="card-header"><span class="card-icon">🗣️</span><h2>Your brand voice</h2></div>
+    <p style="color:var(--text-muted);font-size:14px;line-height:1.6;">Add examples of posts you like under <a href="/history">History</a> and the agent learns your tone, emoji use, and spacing — so drafts sound like you.</p>
+  </div>
+  <div class="card">
+    <div class="card-header"><span class="card-icon">⏰</span><h2>Set-and-forget scheduling</h2></div>
+    <p style="color:var(--text-muted);font-size:14px;line-height:1.6;">Schedule posts for any date and time. The agent keeps running and publishes them at the exact moment — even while you're offline.</p>
+  </div>
+</div>
+
+<h2 style="font-size:15px;font-weight:650;margin:26px 6px 14px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;">Good to know</h2>
+<div class="card">
+  <div style="margin-bottom:16px;">
+    <div style="font-weight:650;margin-bottom:4px;">🔒 Where do my posts go?</div>
+    <p style="color:var(--text-muted);font-size:14px;line-height:1.6;">Only to <strong>your</strong> LinkedIn account — the one you signed in with. Each user's posts, drafts, and data are completely private to them.</p>
+  </div>
+  <div style="margin-bottom:16px;border-top:1px solid var(--border);padding-top:16px;">
+    <div style="font-weight:650;margin-bottom:4px;">✅ Do I approve every post?</div>
+    <p style="color:var(--text-muted);font-size:14px;line-height:1.6;">Yes. Drafts sit in <a href="/drafts">Drafts</a> until you approve or schedule them. Nothing is posted automatically without you scheduling it.</p>
+  </div>
+  <div style="margin-bottom:16px;border-top:1px solid var(--border);padding-top:16px;">
+    <div style="font-weight:650;margin-bottom:4px;">🔁 Can I edit a draft?</div>
+    <p style="color:var(--text-muted);font-size:14px;line-height:1.6;">Absolutely — open any draft's <strong>Preview</strong> to edit the body, change hashtags, or replace the image before it goes out.</p>
+  </div>
+  <div style="border-top:1px solid var(--border);padding-top:16px;">
+    <div style="font-weight:650;margin-bottom:4px;">🔗 How is my LinkedIn connected?</div>
+    <p style="color:var(--text-muted);font-size:14px;line-height:1.6;">Through LinkedIn's official OAuth. You grant permission to post on your behalf; we never see your password, and you can revoke access from LinkedIn anytime.</p>
+  </div>
+</div>
+
+<div class="card" style="text-align:center;padding:30px;">
+  <h2 style="margin-bottom:6px;">Ready to post?</h2>
+  <p style="color:var(--text-muted);font-size:14px;margin-bottom:18px;">Head to the dashboard and generate your first post.</p>
+  <a href="/" class="btn btn-primary">Go to Dashboard →</a>
+</div>
+{{end}}

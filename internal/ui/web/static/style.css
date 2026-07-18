@@ -222,6 +222,34 @@ a:hover { color: var(--blue-light); }
 [data-theme="light"] .theme-icon-light { display: none; }
 [data-theme="dark"] .theme-icon-dark { display: none; }
 
+/* User menu */
+.user-menu { position: relative; margin-left: 10px; }
+.user-btn {
+  width: 34px; height: 34px; border-radius: 999px; padding: 0; cursor: pointer;
+  border: 1px solid var(--border-strong); background: var(--surface-solid); overflow: hidden;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: transform 0.2s var(--ease-spring), box-shadow 0.2s var(--ease-out);
+}
+.user-btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+.user-btn img { width: 100%; height: 100%; object-fit: cover; }
+.user-initial { font-size: 14px; font-weight: 700; color: #fff; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, var(--blue), var(--purple)); }
+.user-dropdown {
+  position: absolute; top: 46px; right: 0; min-width: 210px;
+  background: var(--surface-solid); border: 1px solid var(--border); border-radius: 14px;
+  box-shadow: var(--shadow-lg); padding: 8px; opacity: 0; transform: translateY(-8px) scale(0.98);
+  pointer-events: none; transition: opacity 0.2s var(--ease-out), transform 0.2s var(--ease-spring); z-index: 200;
+}
+.user-dropdown.open { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
+.user-info { padding: 10px 12px; border-bottom: 1px solid var(--border); margin-bottom: 6px; }
+.user-name { font-size: 14px; font-weight: 650; color: var(--text); letter-spacing: -0.01em; }
+.user-email { font-size: 12px; color: var(--text-dim); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-logout {
+  width: 100%; text-align: left; padding: 9px 12px; border-radius: 9px; border: none; cursor: pointer;
+  background: transparent; color: var(--red-t); font-size: 13.5px; font-weight: 600; font-family: inherit;
+  transition: background 0.15s var(--ease-out);
+}
+.user-logout:hover { background: rgba(229,72,77,0.1); }
+
 .container { max-width: 1000px; margin: 0 auto; padding: 40px 26px 64px; }
 
 /* ===== Cards ===== */

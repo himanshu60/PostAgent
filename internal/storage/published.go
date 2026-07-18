@@ -42,9 +42,9 @@ func (r *PublishedRepo) UpdateAnalytics(ctx context.Context, id string, likes, c
 	return err
 }
 
-func (r *PublishedRepo) List(ctx context.Context, limit int) ([]models.PublishedPost, error) {
+func (r *PublishedRepo) List(ctx context.Context, userID string, limit int) ([]models.PublishedPost, error) {
 	opts := options.Find().SetSort(bson.M{"posted_at": -1}).SetLimit(int64(limit))
-	cursor, err := r.coll.Find(ctx, bson.M{}, opts)
+	cursor, err := r.coll.Find(ctx, bson.M{"user_id": userID}, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -55,9 +55,9 @@ func (r *PublishedRepo) List(ctx context.Context, limit int) ([]models.Published
 	return posts, nil
 }
 
-func (r *PublishedRepo) GetRecent(ctx context.Context, limit int) ([]models.PublishedPost, error) {
+func (r *PublishedRepo) GetRecent(ctx context.Context, userID string, limit int) ([]models.PublishedPost, error) {
 	opts := options.Find().SetSort(bson.M{"_id": -1}).SetLimit(int64(limit))
-	cursor, err := r.coll.Find(ctx, bson.M{}, opts)
+	cursor, err := r.coll.Find(ctx, bson.M{"user_id": userID}, opts)
 	if err != nil {
 		return nil, err
 	}

@@ -70,3 +70,11 @@ func (m *MongoDB) Published() *mongo.Collection {
 func (m *MongoDB) Cycles() *mongo.Collection {
 	return m.db.Collection("agent_cycles")
 }
+
+func (m *MongoDB) Users() *mongo.Collection {
+	return m.db.Collection("agent_users")
+}
+
+func (m *MongoDB) Sessions() *mongo.Collection {
+	return m.db.Collection("agent_sessions")
+}

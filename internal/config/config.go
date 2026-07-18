@@ -41,10 +41,10 @@ type GeminiConfig struct {
 }
 
 type ImageConfig struct {
-	Provider     string // pollinations | openai | gemini
-	OpenAIKey    string
-	OpenAIModel  string
-	GeminiModel  string
+	Provider    string // pollinations | openai | gemini
+	OpenAIKey   string
+	OpenAIModel string
+	GeminiModel string
 }
 
 type OllamaConfig struct {
@@ -75,13 +75,13 @@ type NewsAPIConfig struct {
 }
 
 type AgentConfig struct {
-	Schedule     string
-	TopicsCount  int
-	AutoPublish  bool
+	Schedule    string
+	TopicsCount int
+	AutoPublish bool
 	// PublishDays are the weekdays auto-generated posts get scheduled for
 	// (e.g. Mon/Wed/Fri = 3 posts a week). The generator runs the day before
 	// each publish day.
-	PublishDays  []time.Weekday
+	PublishDays []time.Weekday
 }
 
 // parseWeekdays turns "Mon,Wed,Fri" into weekdays; unknown names are skipped.
@@ -161,10 +161,10 @@ func Load() (*Config, error) {
 			APIKey: os.Getenv("NEWSAPI_KEY"),
 		},
 		Agent: AgentConfig{
-			Schedule:     getEnv("AGENT_SCHEDULE", "0 9 * * 1,3,5"),
-			TopicsCount:  getEnvInt("AGENT_TOPICS_COUNT", 5),
-			AutoPublish:  getEnvBool("AGENT_AUTO_PUBLISH", false),
-			PublishDays:  parseWeekdays(getEnv("AGENT_PUBLISH_DAYS", "Mon,Wed,Fri")),
+			Schedule:    getEnv("AGENT_SCHEDULE", "0 9 * * 1,3,5"),
+			TopicsCount: getEnvInt("AGENT_TOPICS_COUNT", 5),
+			AutoPublish: getEnvBool("AGENT_AUTO_PUBLISH", false),
+			PublishDays: parseWeekdays(getEnv("AGENT_PUBLISH_DAYS", "Mon,Wed,Fri")),
 		},
 		BrandVoice: BrandVoiceConfig{
 			Tone:          getEnv("BRAND_VOICE_TONE", "professional"),

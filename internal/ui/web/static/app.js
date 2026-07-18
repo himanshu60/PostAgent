@@ -135,6 +135,23 @@
     });
   }
 
+  /* ---- User menu dropdown ---- */
+  var userBtn = document.getElementById('user-btn');
+  var userDropdown = document.getElementById('user-dropdown');
+  if (userBtn && userDropdown) {
+    userBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var open = userDropdown.classList.toggle('open');
+      userBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+    document.addEventListener('click', function (e) {
+      if (userDropdown.classList.contains('open') && !userDropdown.contains(e.target) && e.target !== userBtn) {
+        userDropdown.classList.remove('open');
+        userBtn.setAttribute('aria-expanded', 'false');
+      }
+    });
+  }
+
   /* ---- Dark/light theme toggle ---- */
   var themeBtn = document.getElementById('theme-toggle');
   if (themeBtn) {
