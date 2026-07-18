@@ -89,6 +89,18 @@
     if (el) el.classList.toggle('open');
   };
 
+  /* ---- Card cursor spotlight (Linear/Vercel-style micro-interaction) ---- */
+  var spotlightCards = document.querySelectorAll('.card');
+  if (window.matchMedia && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    spotlightCards.forEach(function (card) {
+      card.addEventListener('mousemove', function (e) {
+        var r = card.getBoundingClientRect();
+        card.style.setProperty('--mx', (e.clientX - r.left) + 'px');
+        card.style.setProperty('--my', (e.clientY - r.top) + 'px');
+      });
+    });
+  }
+
   /* ---- Graceful media image loading ----
      Generated images (e.g. Pollinations) render on demand and can be slow or
      occasionally fail. Show a skeleton while loading and a clean placeholder on
