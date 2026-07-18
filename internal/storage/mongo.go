@@ -78,3 +78,7 @@ func (m *MongoDB) Users() *mongo.Collection {
 func (m *MongoDB) Sessions() *mongo.Collection {
 	return m.db.Collection("agent_sessions")
 }
+
+func (m *MongoDB) Media() *mongo.Collection {
+	return m.db.Collection("agent_media")
+}

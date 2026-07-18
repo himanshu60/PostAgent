@@ -10,7 +10,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -74,6 +73,7 @@ type Server struct {
 	cycles    *storage.CycleRepo
 	users     *storage.UserRepo
 	sessions  *storage.SessionRepo
+	media     *storage.MediaRepo
 	li        config.LinkedInConfig
 	gen       *generator.LLMGenerator
 	voice     generator.BrandVoice
@@ -129,7 +129,7 @@ type layoutData struct {
 	Content template.HTML
 }
 
-func NewServer(addr string, logger *zap.Logger, agent AgentBridge, examples *analyzer.ExampleStore, draftRepo *storage.DraftRepo, topicRepo *storage.TopicRepo, publishedRepo *storage.PublishedRepo, cycleRepo *storage.CycleRepo, userRepo *storage.UserRepo, sessionRepo *storage.SessionRepo, li config.LinkedInConfig, gen *generator.LLMGenerator, voice generator.BrandVoice, maxPosts int) *Server {
+func NewServer(addr string, logger *zap.Logger, agent AgentBridge, examples *analyzer.ExampleStore, draftRepo *storage.DraftRepo, topicRepo *storage.TopicRepo, publishedRepo *storage.PublishedRepo, cycleRepo *storage.CycleRepo, userRepo *storage.UserRepo, sessionRepo *storage.SessionRepo, mediaRepo *storage.MediaRepo, li config.LinkedInConfig, gen *generator.LLMGenerator, voice generator.BrandVoice, maxPosts int) *Server {
 	if maxPosts < 1 {
 		maxPosts = 1
 	}
@@ -144,6 +144,7 @@ func NewServer(addr string, logger *zap.Logger, agent AgentBridge, examples *ana
 		cycles:    cycleRepo,
 		users:     userRepo,
 		sessions:  sessionRepo,
+		media:     mediaRepo,
 		li:        li,
 		gen:       gen,
 		voice:     voice,
@@ -617,14 +618,16 @@ func (s *Server) handleDraftMedia(w http.ResponseWriter, r *http.Request) {
 	changed := false
 	if file, hdr, err := r.FormFile("file"); err == nil {
 		defer file.Close()
-		localPath, serveURL, serr := s.saveUploadedMedia(id, hdr.Filename, file)
-		if serr != nil {
+		if serr := s.saveUploadedMedia(ctx, userFromCtx(ctx).ID, id, hdr.Filename, file); serr != nil {
 			s.logger.Error("Failed to save uploaded media", zap.Error(serr))
 			s.redirect(w, r, "/drafts/"+id+"?err=Upload+failed+—+try+again")
 			return
 		}
-		media.LocalPath = localPath
-		media.SourceURL = serveURL // for preview only
+		// Absolute, persistent URL: served from MongoDB, so it survives restarts
+		// AND is what gets uploaded to LinkedIn at publish time (taking priority
+		// over the auto-generated Pollinations image).
+		media.LocalPath = ""
+		media.SourceURL = baseURL(r) + "/media/" + id
 		media.LinkedInAssetURN = ""
 		changed = true
 	} else if url := r.FormValue("url"); url != "" {
@@ -646,28 +649,23 @@ func (s *Server) handleDraftMedia(w http.ResponseWriter, r *http.Request) {
 	s.redirect(w, r, "/drafts/"+id+"?ok=Media+updated")
 }
 
-// saveUploadedMedia stores an uploaded file under mediaDir and returns its local
-// path (for LinkedIn upload) and a /media/ URL (for the web preview).
-func (s *Server) saveUploadedMedia(draftID, filename string, file io.Reader) (localPath, serveURL string, err error) {
-	if err := os.MkdirAll(mediaDir, 0755); err != nil {
-		return "", "", err
-	}
-	ext := strings.ToLower(filepath.Ext(filename))
-	if ext == "" {
-		ext = ".jpg"
-	}
-	name := draftID + ext
-	localPath = filepath.Join(mediaDir, name)
-
-	out, err := os.Create(localPath)
+// saveUploadedMedia stores an uploaded image in MongoDB under the given id, so
+// it persists across restarts/ephemeral disks and is fetchable at publish time.
+func (s *Server) saveUploadedMedia(ctx context.Context, userID, id, filename string, file io.Reader) error {
+	data, err := io.ReadAll(io.LimitReader(file, 8<<20)) // 8MB cap (LinkedIn allows ~6MB)
 	if err != nil {
-		return "", "", err
+		return err
 	}
-	defer out.Close()
-	if _, err := io.Copy(out, io.LimitReader(file, 20<<20)); err != nil {
-		return "", "", err
+	ct := "image/jpeg"
+	switch strings.ToLower(filepath.Ext(filename)) {
+	case ".png":
+		ct = "image/png"
+	case ".gif":
+		ct = "image/gif"
+	case ".webp":
+		ct = "image/webp"
 	}
-	return localPath, "/media/" + name, nil
+	return s.media.Put(ctx, id, userID, ct, data)
 }
 
 func (s *Server) serveMedia(w http.ResponseWriter, r *http.Request) {
@@ -676,7 +674,19 @@ func (s *Server) serveMedia(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	http.ServeFile(w, r, filepath.Join(mediaDir, name))
+	// Media id may carry a legacy extension (e.g. "<id>.png"); strip it.
+	id := name
+	if i := strings.LastIndexByte(name, '.'); i > 0 {
+		id = name[:i]
+	}
+	ct, data, err := s.media.Get(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", ct)
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	w.Write(data)
 }
 
 func (s *Server) handleDraftReject(w http.ResponseWriter, r *http.Request) {

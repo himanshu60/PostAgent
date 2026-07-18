@@ -75,6 +75,7 @@ func main() {
 	cycleRepo := storage.NewCycleRepo(mdb)
 	userRepo := storage.NewUserRepo(mdb)
 	sessionRepo := storage.NewSessionRepo(mdb)
+	mediaRepo := storage.NewMediaRepo(mdb)
 
 	rssFetcher := research.NewRSSFetcher(nil, logger)
 	newsFetcher := research.NewNewsAPIFetcher(cfg.NewsAPI.APIKey, nil, logger)
@@ -126,7 +127,7 @@ func main() {
 	sched := scheduler.New(agt, logger)
 
 	if *serve {
-		webServer := webui.NewServer(*addr, logger, agt, exampleStore, draftRepo, topicRepo, publishedRepo, cycleRepo, userRepo, sessionRepo, cfg.LinkedIn, gen, voice, cfg.Agent.TopicsCount)
+		webServer := webui.NewServer(*addr, logger, agt, exampleStore, draftRepo, topicRepo, publishedRepo, cycleRepo, userRepo, sessionRepo, mediaRepo, cfg.LinkedIn, gen, voice, cfg.Agent.TopicsCount)
 		if err := webServer.Start(); err != nil {
 			logger.Fatal("Failed to start web server", zap.Error(err))
 		}
