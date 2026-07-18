@@ -203,6 +203,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("GET /generate-stream", s.requireAuth(s.handleGenerateStream))
 	mux.HandleFunc("POST /generate-from-query", s.requireAuth(s.handleGenerateFromQuery))
 	mux.HandleFunc("GET /cycles", s.requireAuth(s.handleCycles))
+	mux.HandleFunc("GET /guide", s.requireAuth(s.handleGuide))
 
 	srv := &http.Server{
 		Addr:    s.addr,
@@ -1078,4 +1079,8 @@ func (s *Server) handleCycles(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	cycles, _ := s.cycles.List(ctx, userFromCtx(ctx).ID, 20)
 	s.renderPageFlash(w, r, "cycles", "Cycles", cycles)
+}
+
+func (s *Server) handleGuide(w http.ResponseWriter, r *http.Request) {
+	s.renderPageFlash(w, r, "guide", "Guide", nil)
 }

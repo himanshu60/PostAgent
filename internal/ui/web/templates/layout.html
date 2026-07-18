@@ -32,6 +32,7 @@
     <a href="/topics" {{if eq .Page "topics"}}class="active"{{end}}>Topics</a>
     <a href="/history" {{if eq .Page "history"}}class="active"{{end}}>History</a>
     <a href="/cycles" {{if eq .Page "cycles"}}class="active"{{end}}>Cycles</a>
+    <a href="/guide" {{if eq .Page "guide"}}class="active"{{end}}>Guide</a>
     <form method="POST" action="/run" class="nav-run" data-confirm="Run a full agent cycle now? This researches topics and generates posts.">
       <button type="submit" class="btn btn-primary btn-sm">⚡ Run Cycle</button>
     </form>

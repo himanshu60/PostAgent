@@ -34,6 +34,29 @@ enough to restart safely and resume where it left off.
 
 ---
 
+## 1a. Authentication & multi-tenancy
+
+PostAgent is **multi-tenant**: each user is a tenant identified by their LinkedIn
+account.
+
+- **Sign in with LinkedIn (OpenID Connect).** One OAuth flow yields both the
+  user's identity (`sub`, name, email, picture) *and* their posting tokens
+  (`w_member_social`). The `sub` becomes the user's primary id. Handled in
+  `internal/ui/web/auth.go`.
+- **Sessions.** A random token is stored in `agent_sessions` and set as a secure,
+  http-only cookie. `requireAuth` middleware loads the user for every protected
+  route and injects it into the request context; anonymous visitors are sent to
+  `/login`.
+- **Data isolation.** Every draft/topic/published/cycle document carries a
+  `user_id`. All list queries filter by it, and every by-id mutation verifies
+  ownership — so one tenant can never read or change another's data.
+- **Per-user publishing.** The scheduler resolves each due draft's owner and
+  builds a LinkedIn client from *that user's* tokens (`PublisherFactory` in
+  `cmd/agent`), so a post is always authored by its own account. Refreshed
+  tokens are written back to the user record.
+- **Generation is user-driven.** Users generate/schedule from the UI; there is
+  no shared auto-generate cron.
+
 ## 2. High-level architecture
 
 ```
@@ -81,6 +104,7 @@ scheduler and/or web server.
 | `cmd/agent` | Entry point; flag parsing; dependency wiring; OAuth bootstrap. |
 | `cmd/regen` | One-off utility to regenerate content. |
 | `internal/config` | Loads all settings from env/`.env`; validates required ones (`MONGO_URI`, provider keys). |
+| `internal/ui/web/auth.go` | Sign-in-with-LinkedIn OAuth flow, sessions, `requireAuth` middleware, current-user context. |
 | `internal/research` | Fetches trending items from RSS feeds + NewsAPI; dedups; converts to topic candidates. |
 | `internal/analyzer` | Learns your voice from past posts; builds a style guide; stores examples. |
 | `internal/generator` | Turns a topic into a `Draft`: LLM writes the post text; builds an image prompt + image URL. |
@@ -161,6 +185,10 @@ LinkedIn media and attached to the post.
 | `agent_drafts` | `Draft` (+ embedded `Media`) | Generated posts: title, body, hashtags, status, `scheduled_for`, media. |
 | `agent_published` | `Published` | Posts that went live: LinkedIn post URL, timestamp. |
 | `agent_cycles` | `Cycle` | One record per run for auditing (status, draft IDs, trigger). |
+| `agent_users` | `User` | One per tenant: LinkedIn identity + posting tokens + settings. |
+| `agent_sessions` | `Session` | Active login sessions (token → user, expiry). |
+
+Every content collection above carries a `user_id`; all reads filter by it.
 
 `Draft.Status` flows: `draft → approved → (scheduled) → published` (or
 `rejected`). `Media` carries `SourceURL` (preview/fallback image), `LocalPath`

@@ -1,8 +1,16 @@
 # Deploying PostAgent — free, always-on, auto-publish (Render)
 
-This guide deploys PostAgent on **Render's free tier** so it runs 24/7,
-generates posts on a schedule, and **publishes to LinkedIn automatically** —
-at $0/month. It also lists every API and environment variable the app uses.
+This guide deploys PostAgent on **Render's free tier** at $0/month. It lists
+every API and environment variable the app uses.
+
+> **Multi-tenant:** users **sign in with LinkedIn** and each user's posts go to
+> their own account. You (the operator) only configure the LinkedIn **app**
+> (client id/secret) once — individual users' tokens are captured at sign-in, so
+> you do **not** put `LINKEDIN_ACCESS_TOKEN` / `PERSON_ID` in the environment.
+>
+> **Required:** in your LinkedIn app → **Auth → Authorized redirect URLs**, add
+> `https://<your-service>.onrender.com/auth/callback` (and
+> `http://localhost:8081/auth/callback` for local testing).
 
 - **Recommended path:** Render (this guide). Simplest — deploy straight from
   GitHub, no server to manage.
@@ -66,16 +74,16 @@ Set these in Render's **Environment** tab (§5). `✱` = required.
 | `MONGO_URI` ✱ | `mongodb+srv://user:pass@cluster0.xxx.mongodb.net/...` | From Atlas (§3). Required or app won't start. |
 | `MONGO_DB` | `linkedin_agent` | Database name |
 
-### LinkedIn (publishing)
+### LinkedIn (the OAuth app — set once, for all users)
 | Variable | Notes |
 |---|---|
 | `LINKEDIN_CLIENT_ID` ✱ | From your LinkedIn app |
 | `LINKEDIN_CLIENT_SECRET` ✱ | From your LinkedIn app |
-| `LINKEDIN_ACCESS_TOKEN` ✱ | From the OAuth flow (§4) |
-| `LINKEDIN_REFRESH_TOKEN` ✱ | From the OAuth flow (§4) |
-| `LINKEDIN_PERSON_ID` ✱ | From the OAuth flow (§4) |
-| `LINKEDIN_REDIRECT_URI` | `http://localhost:8080/auth/callback` (used during §4) |
 | `LINKEDIN_API_VERSION` | `202606` — **must be a currently-active `YYYYMM`**; expired → `426` error |
+
+> Users' `ACCESS_TOKEN` / `REFRESH_TOKEN` / `PERSON_ID` are **not** env vars —
+> they're captured when each user signs in with LinkedIn. Just make sure the
+> app's redirect URLs include `https://<your-service>.onrender.com/auth/callback`.
 
 ### Scheduling & behavior
 | Variable | Default | Notes |
