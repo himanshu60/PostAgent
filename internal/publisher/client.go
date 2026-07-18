@@ -90,11 +90,11 @@ func toBoldUnicode(s string) string {
 }
 
 type Client struct {
-	oauth  *OAuthClient
-	personID string
+	oauth      *OAuthClient
+	personID   string
 	apiVersion string
-	imageGen ImageGenConfig
-	logger *zap.Logger
+	imageGen   ImageGenConfig
+	logger     *zap.Logger
 }
 
 // SetImageGen configures optional live image generation (e.g. OpenAI) used at
@@ -142,9 +142,9 @@ func (c *Client) CreatePost(ctx context.Context, draft *models.Draft) (postID st
 	body := composeBody(draft)
 
 	linkedInReq := linkedInPostRequest{
-		Author:      "urn:li:person:" + c.personID,
-		Commentary:  body,
-		Visibility:  "PUBLIC",
+		Author:         "urn:li:person:" + c.personID,
+		Commentary:     body,
+		Visibility:     "PUBLIC",
 		LifecycleState: "PUBLISHED",
 		Distribution: distribution{
 			FeedDistribution: "MAIN_FEED",

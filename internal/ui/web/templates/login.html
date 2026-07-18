@@ -1,0 +1,59 @@
+{{define "login"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign in — PostAgent</title>
+<script>
+(function () {
+  var t = localStorage.getItem('pa-theme');
+  if (!t) t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', t);
+})();
+</script>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .login-card {
+    width: 100%; max-width: 420px; text-align: center;
+    background: var(--surface-solid); border: 1px solid var(--border);
+    border-radius: 20px; padding: 44px 36px; box-shadow: var(--shadow-lg);
+    animation: fadeInUp 0.5s var(--ease-out) both;
+  }
+  .login-mark {
+    width: 52px; height: 52px; border-radius: 15px; margin: 0 auto 22px;
+    background: linear-gradient(135deg, var(--blue), var(--purple));
+    box-shadow: 0 8px 24px rgba(90,90,240,0.4), inset 0 1px 0 rgba(255,255,255,0.3);
+    display: flex; align-items: center; justify-content: center; font-size: 24px;
+  }
+  .login-card h1 { font-size: 24px; font-weight: 750; letter-spacing: -0.03em; margin-bottom: 8px; }
+  .login-card p { color: var(--text-muted); font-size: 14px; line-height: 1.6; margin-bottom: 28px; }
+  .btn-linkedin {
+    display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+    width: 100%; padding: 13px 18px; border-radius: 12px; font-size: 15px; font-weight: 650;
+    background: #0a66c2; color: #fff; border: none; cursor: pointer; text-decoration: none;
+    box-shadow: 0 2px 12px rgba(10,102,194,0.35);
+    transition: transform 0.16s var(--ease-out), box-shadow 0.18s var(--ease-out);
+  }
+  .btn-linkedin:hover { transform: translateY(-1px); box-shadow: 0 6px 22px rgba(10,102,194,0.45); text-decoration: none; color:#fff; }
+  .btn-linkedin svg { width: 20px; height: 20px; fill: #fff; }
+  .login-foot { margin-top: 22px; font-size: 12px; color: var(--text-dim); line-height: 1.6; }
+</style>
+</head>
+<body>
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="login-mark">◆</div>
+    <h1>PostAgent</h1>
+    <p>Your AI LinkedIn content studio. Sign in with LinkedIn to generate,
+       review, and schedule posts — published to <strong>your</strong> account.</p>
+    {{if .Error}}<div class="alert alert-error" style="text-align:left;">⚠️ {{.Error}}</div>{{end}}
+    <a class="btn-linkedin" href="/auth/linkedin">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.13 1.45-2.13 2.94v5.67H9.35V9h3.42v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13zM7.12 20.45H3.55V9h3.57v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z"/></svg>
+      Sign in with LinkedIn
+    </a>
+    <div class="login-foot">We request permission to post on your behalf and read your basic profile. You control every post.</div>
+  </div>
+</div>
+</body>
+</html>{{end}}

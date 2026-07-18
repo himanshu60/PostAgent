@@ -20,6 +20,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/clodura/linkedin-post-agent/internal/analyzer"
+	"github.com/clodura/linkedin-post-agent/internal/config"
 	"github.com/clodura/linkedin-post-agent/internal/generator"
 	"github.com/clodura/linkedin-post-agent/internal/models"
 	"github.com/clodura/linkedin-post-agent/internal/research"
@@ -71,6 +72,9 @@ type Server struct {
 	topics    *storage.TopicRepo
 	published *storage.PublishedRepo
 	cycles    *storage.CycleRepo
+	users     *storage.UserRepo
+	sessions  *storage.SessionRepo
+	li        config.LinkedInConfig
 	gen       *generator.LLMGenerator
 	voice     generator.BrandVoice
 	maxPosts  int
@@ -112,7 +116,7 @@ func (s *Server) recentSuggestedTitles() []string {
 }
 
 type AgentBridge interface {
-	RunCycle(ctx context.Context, topicCount int) error
+	Generate(ctx context.Context, userID string, topicCount int) ([]models.Draft, error)
 	PublishScheduled(ctx context.Context) error
 }
 
@@ -121,10 +125,11 @@ type layoutData struct {
 	Page    string
 	Error   string
 	Success string
+	User    *models.User
 	Content template.HTML
 }
 
-func NewServer(addr string, logger *zap.Logger, agent AgentBridge, examples *analyzer.ExampleStore, draftRepo *storage.DraftRepo, topicRepo *storage.TopicRepo, publishedRepo *storage.PublishedRepo, cycleRepo *storage.CycleRepo, gen *generator.LLMGenerator, voice generator.BrandVoice, maxPosts int) *Server {
+func NewServer(addr string, logger *zap.Logger, agent AgentBridge, examples *analyzer.ExampleStore, draftRepo *storage.DraftRepo, topicRepo *storage.TopicRepo, publishedRepo *storage.PublishedRepo, cycleRepo *storage.CycleRepo, userRepo *storage.UserRepo, sessionRepo *storage.SessionRepo, li config.LinkedInConfig, gen *generator.LLMGenerator, voice generator.BrandVoice, maxPosts int) *Server {
 	if maxPosts < 1 {
 		maxPosts = 1
 	}
@@ -137,6 +142,9 @@ func NewServer(addr string, logger *zap.Logger, agent AgentBridge, examples *ana
 		topics:    topicRepo,
 		published: publishedRepo,
 		cycles:    cycleRepo,
+		users:     userRepo,
+		sessions:  sessionRepo,
+		li:        li,
 		gen:       gen,
 		voice:     voice,
 		maxPosts:  maxPosts,
@@ -149,7 +157,13 @@ func NewServer(addr string, logger *zap.Logger, agent AgentBridge, examples *ana
 		"formatScheduled": formatScheduled,
 		"nl2br":           nl2br,
 		"join":            strings.Join,
-		"firstChar":       func(s string) string { runes := []rune(s); if len(runes) > 0 { return string(runes[:1]) }; return "?" },
+		"firstChar": func(s string) string {
+			runes := []rune(s)
+			if len(runes) > 0 {
+				return string(runes[:1])
+			}
+			return "?"
+		},
 	}
 
 	s.templates = template.Must(template.New("").Funcs(funcMap).ParseFS(templateFiles, "templates/*.html"))
@@ -159,29 +173,36 @@ func NewServer(addr string, logger *zap.Logger, agent AgentBridge, examples *ana
 func (s *Server) Start() error {
 	mux := http.NewServeMux()
 
+	// Public (no auth)
 	mux.HandleFunc("GET /static/", s.serveStatic)
 	mux.HandleFunc("GET /media/", s.serveMedia)
-	mux.HandleFunc("GET /", s.handleDashboard)
-	mux.HandleFunc("GET /drafts", s.handleDrafts)
-	mux.HandleFunc("GET /drafts/{id}", s.handleDraftPreview)
-	mux.HandleFunc("POST /drafts/{id}/approve", s.handleDraftApprove)
-	mux.HandleFunc("POST /drafts/{id}/schedule", s.handleDraftSchedule)
-	mux.HandleFunc("POST /drafts/{id}/cancel-schedule", s.handleDraftCancelSchedule)
-	mux.HandleFunc("POST /drafts/{id}/edit", s.handleDraftEdit)
-	mux.HandleFunc("POST /drafts/{id}/media", s.handleDraftMedia)
-	mux.HandleFunc("POST /drafts/{id}/reject", s.handleDraftReject)
-	mux.HandleFunc("GET /history", s.handleHistory)
-	mux.HandleFunc("POST /history/add", s.handleAddExample)
-	mux.HandleFunc("POST /history/clear", s.handleClearExamples)
-	mux.HandleFunc("GET /scheduled", s.handleScheduled)
-	mux.HandleFunc("GET /topics", s.handleTopics)
-	mux.HandleFunc("GET /topics/search", s.handleTopicSearch)
-	mux.HandleFunc("POST /topics/add", s.handleAddTopic)
-	mux.HandleFunc("POST /topics/{id}/delete", s.handleDeleteTopic)
-	mux.HandleFunc("POST /run", s.handleRunCycle)
-	mux.HandleFunc("GET /generate-stream", s.handleGenerateStream)
-	mux.HandleFunc("POST /generate-from-query", s.handleGenerateFromQuery)
-	mux.HandleFunc("GET /cycles", s.handleCycles)
+	mux.HandleFunc("GET /login", s.handleLogin)
+	mux.HandleFunc("GET /auth/linkedin", s.handleLinkedInStart)
+	mux.HandleFunc("GET /auth/callback", s.handleLinkedInCallback)
+	mux.HandleFunc("POST /logout", s.handleLogout)
+
+	// Protected (require a logged-in user; scoped to that user)
+	mux.HandleFunc("GET /{$}", s.requireAuth(s.handleDashboard))
+	mux.HandleFunc("GET /drafts", s.requireAuth(s.handleDrafts))
+	mux.HandleFunc("GET /drafts/{id}", s.requireAuth(s.handleDraftPreview))
+	mux.HandleFunc("POST /drafts/{id}/approve", s.requireAuth(s.handleDraftApprove))
+	mux.HandleFunc("POST /drafts/{id}/schedule", s.requireAuth(s.handleDraftSchedule))
+	mux.HandleFunc("POST /drafts/{id}/cancel-schedule", s.requireAuth(s.handleDraftCancelSchedule))
+	mux.HandleFunc("POST /drafts/{id}/edit", s.requireAuth(s.handleDraftEdit))
+	mux.HandleFunc("POST /drafts/{id}/media", s.requireAuth(s.handleDraftMedia))
+	mux.HandleFunc("POST /drafts/{id}/reject", s.requireAuth(s.handleDraftReject))
+	mux.HandleFunc("GET /history", s.requireAuth(s.handleHistory))
+	mux.HandleFunc("POST /history/add", s.requireAuth(s.handleAddExample))
+	mux.HandleFunc("POST /history/clear", s.requireAuth(s.handleClearExamples))
+	mux.HandleFunc("GET /scheduled", s.requireAuth(s.handleScheduled))
+	mux.HandleFunc("GET /topics", s.requireAuth(s.handleTopics))
+	mux.HandleFunc("GET /topics/search", s.requireAuth(s.handleTopicSearch))
+	mux.HandleFunc("POST /topics/add", s.requireAuth(s.handleAddTopic))
+	mux.HandleFunc("POST /topics/{id}/delete", s.requireAuth(s.handleDeleteTopic))
+	mux.HandleFunc("POST /run", s.requireAuth(s.handleRunCycle))
+	mux.HandleFunc("GET /generate-stream", s.requireAuth(s.handleGenerateStream))
+	mux.HandleFunc("POST /generate-from-query", s.requireAuth(s.handleGenerateFromQuery))
+	mux.HandleFunc("GET /cycles", s.requireAuth(s.handleCycles))
 
 	srv := &http.Server{
 		Addr:    s.addr,
@@ -239,11 +260,22 @@ func (s *Server) renderPageFlash(w http.ResponseWriter, r *http.Request, page, t
 	if r != nil {
 		ld.Success = r.URL.Query().Get("ok")
 		ld.Error = r.URL.Query().Get("err")
+		ld.User = userFromCtx(r.Context())
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.templates.ExecuteTemplate(w, "layout.html", ld); err != nil {
 		s.logger.Error("Layout template error", zap.Error(err))
+	}
+}
+
+// renderBare renders a standalone full-page template (no app chrome), used for
+// the login page.
+func (s *Server) renderBare(w http.ResponseWriter, page, title string, data interface{}) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.templates.ExecuteTemplate(w, page, data); err != nil {
+		s.logger.Error("Bare template error", zap.String("page", page), zap.Error(err))
+		http.Error(w, "Internal error", http.StatusInternalServerError)
 	}
 }
 
@@ -296,15 +328,16 @@ func nl2br(s string) template.HTML {
 
 func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	drafts, _ := s.drafts.List(ctx, "", 20)
+	uid := userFromCtx(ctx).ID
+	drafts, _ := s.drafts.List(ctx, uid, "", 20)
 	if drafts == nil {
 		drafts = []models.Draft{}
 	}
-	published, _ := s.published.List(ctx, 5)
+	published, _ := s.published.List(ctx, uid, 5)
 	if published == nil {
 		published = []models.PublishedPost{}
 	}
-	recentCycles, _ := s.cycles.List(ctx, 5)
+	recentCycles, _ := s.cycles.List(ctx, uid, 5)
 	if recentCycles == nil {
 		recentCycles = []models.Cycle{}
 	}
@@ -318,13 +351,13 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleDrafts(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	drafts, _ := s.drafts.List(ctx, "", 50)
+	drafts, _ := s.drafts.List(ctx, userFromCtx(ctx).ID, "", 50)
 	s.renderPageFlash(w, r, "drafts", "Drafts", drafts)
 }
 
 func (s *Server) handleScheduled(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	drafts, _ := s.drafts.List(ctx, string(models.DraftStatusApproved), 50)
+	drafts, _ := s.drafts.List(ctx, userFromCtx(ctx).ID, string(models.DraftStatusApproved), 50)
 	if drafts == nil {
 		drafts = []models.Draft{}
 	}
@@ -351,12 +384,26 @@ func (s *Server) handleScheduled(w http.ResponseWriter, r *http.Request) {
 	s.renderPageFlash(w, r, "scheduled", "Scheduled Posts", data)
 }
 
+// ownedDraft fetches a draft and confirms it belongs to the current user, so a
+// user can never read or mutate another tenant's draft by guessing its id.
+func (s *Server) ownedDraft(ctx context.Context, id string) (*models.Draft, bool) {
+	d, err := s.drafts.GetByID(ctx, id)
+	if err != nil {
+		return nil, false
+	}
+	u := userFromCtx(ctx)
+	if u == nil || d.UserID != u.ID {
+		return nil, false
+	}
+	return d, true
+}
+
 func (s *Server) handleDraftPreview(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := r.PathValue("id")
-	draft, err := s.drafts.GetByID(ctx, id)
-	if err != nil {
-		s.renderPageFlash(w, r, "drafts", "Drafts", nil)
+	draft, ok := s.ownedDraft(ctx, id)
+	if !ok {
+		s.redirect(w, r, "/drafts?err=Draft+not+found")
 		return
 	}
 
@@ -371,8 +418,8 @@ func (s *Server) handleDraftApprove(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := r.PathValue("id")
 
-	draft, err := s.drafts.GetByID(ctx, id)
-	if err != nil {
+	draft, ok := s.ownedDraft(ctx, id)
+	if !ok {
 		s.redirect(w, r, "/drafts?err=Draft+not+found")
 		return
 	}
@@ -402,6 +449,10 @@ func (s *Server) handleDraftApprove(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDraftSchedule(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := r.PathValue("id")
+	if _, ok := s.ownedDraft(ctx, id); !ok {
+		s.redirect(w, r, "/drafts?err=Draft+not+found")
+		return
+	}
 
 	dt := r.FormValue("datetime")
 	tz := r.FormValue("tz")
@@ -485,6 +536,10 @@ func (s *Server) handleDraftSchedule(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDraftCancelSchedule(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := r.PathValue("id")
+	if _, ok := s.ownedDraft(ctx, id); !ok {
+		s.redirect(w, r, "/drafts?err=Draft+not+found")
+		return
+	}
 
 	if err := s.drafts.ClearScheduledFor(ctx, id); err != nil {
 		s.logger.Error("Failed to clear scheduled_for", zap.Error(err))
@@ -500,6 +555,10 @@ func (s *Server) handleDraftCancelSchedule(w http.ResponseWriter, r *http.Reques
 func (s *Server) handleDraftEdit(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := r.PathValue("id")
+	if _, ok := s.ownedDraft(ctx, id); !ok {
+		http.Error(w, "Not found", http.StatusNotFound)
+		return
+	}
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Bad request", http.StatusBadRequest)
@@ -526,6 +585,10 @@ func (s *Server) handleDraftEdit(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDraftMedia(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := r.PathValue("id")
+	if _, ok := s.ownedDraft(ctx, id); !ok {
+		s.redirect(w, r, "/drafts?err=Draft+not+found")
+		return
+	}
 
 	_ = r.ParseMultipartForm(20 << 20) // up to 20MB uploads
 
@@ -619,9 +682,14 @@ func (s *Server) handleDraftReject(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := r.PathValue("id")
 
+	draft, ok := s.ownedDraft(ctx, id)
+	if !ok {
+		s.redirect(w, r, "/drafts?err=Draft+not+found")
+		return
+	}
 	// Guard: rejecting a published draft would misrecord history (the post is
 	// already live on LinkedIn).
-	if draft, err := s.drafts.GetByID(ctx, id); err == nil && draft.Status == models.DraftStatusPublished {
+	if draft.Status == models.DraftStatusPublished {
 		s.redirect(w, r, "/drafts/"+id+"?err=Already+published+—+delete+it+on+LinkedIn+if+needed")
 		return
 	}
@@ -634,7 +702,7 @@ func (s *Server) handleDraftReject(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	published, _ := s.published.List(ctx, 20)
+	published, _ := s.published.List(ctx, userFromCtx(ctx).ID, 20)
 	examples, _ := s.examples.List(ctx, 20)
 
 	var pattern *analyzer.PostPattern
@@ -677,10 +745,11 @@ func (s *Server) handleGenerateFromQuery(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	uid := userFromCtx(r.Context()).ID
 	s.logger.Info("Generating drafts from query", zap.String("query", query))
 	s.redirect(w, r, "/")
 
-	go func(q string) {
+	go func(q, uid string) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
 
@@ -695,7 +764,7 @@ func (s *Server) handleGenerateFromQuery(w http.ResponseWriter, r *http.Request)
 			styleGuide = pattern.PromptSuffix()
 		}
 
-		history, _ := s.topics.RecentTitles(ctx, topicHistoryLookback)
+		history, _ := s.topics.RecentTitles(ctx, uid, topicHistoryLookback)
 		history = append(history, s.recentSuggestedTitles()...)
 
 		ideas, err := s.gen.GenerateTopicIdeas(ctx, q, exampleBodies, history)
@@ -713,6 +782,7 @@ func (s *Server) handleGenerateFromQuery(w http.ResponseWriter, r *http.Request)
 		var generated int
 		for _, idea := range ideas {
 			topic := models.Topic{
+				UserID:  uid,
 				Title:   idea.Title,
 				Summary: idea.Hook,
 				Source:  "manual",
@@ -728,6 +798,7 @@ func (s *Server) handleGenerateFromQuery(w http.ResponseWriter, r *http.Request)
 				continue
 			}
 
+			draft.UserID = uid
 			draft.TopicID = topic.ID
 			if err := s.drafts.Insert(ctx, draft); err != nil {
 				s.logger.Warn("Failed to store draft", zap.Error(err))
@@ -737,7 +808,7 @@ func (s *Server) handleGenerateFromQuery(w http.ResponseWriter, r *http.Request)
 		}
 
 		s.logger.Info("Generated drafts from query", zap.Int("count", generated))
-	}(query)
+	}(query, uid)
 }
 
 func (s *Server) handleGenerateStream(w http.ResponseWriter, r *http.Request) {
@@ -746,6 +817,8 @@ func (s *Server) handleGenerateStream(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Missing query", http.StatusBadRequest)
 		return
 	}
+
+	uid := userFromCtx(r.Context()).ID
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -775,7 +848,7 @@ func (s *Server) handleGenerateStream(w http.ResponseWriter, r *http.Request) {
 		styleGuide = pattern.PromptSuffix()
 	}
 
-	history, _ := s.topics.RecentTitles(ctx, topicHistoryLookback)
+	history, _ := s.topics.RecentTitles(ctx, uid, topicHistoryLookback)
 	history = append(history, s.recentSuggestedTitles()...)
 
 	ideas, err := s.gen.GenerateTopicIdeas(ctx, query, exampleBodies, history)
@@ -814,6 +887,7 @@ func (s *Server) handleGenerateStream(w http.ResponseWriter, r *http.Request) {
 		flusher.Flush()
 
 		topic := models.Topic{
+			UserID:  uid,
 			Title:   idea.Title,
 			Summary: idea.Hook,
 			Source:  "manual",
@@ -834,16 +908,17 @@ func (s *Server) handleGenerateStream(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
+		draft.UserID = uid
 		draft.TopicID = topic.ID
 		draft.Title = idea.Title
 		_ = s.drafts.Insert(ctx, draft)
 
 		draftEvent, _ := json.Marshal(map[string]interface{}{
-			"index":     i,
-			"id":        draft.ID,
-			"title":     idea.Title,
-			"body":      draft.Body,
-			"hashtags":  draft.Hashtags,
+			"index":    i,
+			"id":       draft.ID,
+			"title":    idea.Title,
+			"body":     draft.Body,
+			"hashtags": draft.Hashtags,
 		})
 		fmt.Fprintf(w, "event: draft\ndata: %s\n\n", draftEvent)
 		flusher.Flush()
@@ -854,19 +929,20 @@ func (s *Server) handleGenerateStream(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleRunCycle(w http.ResponseWriter, r *http.Request) {
-	go func() {
+	uid := userFromCtx(r.Context()).ID
+	go func(uid string) {
 		cycleCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
-		if err := s.agent.RunCycle(cycleCtx, s.maxPosts); err != nil {
+		if _, err := s.agent.Generate(cycleCtx, uid, s.maxPosts); err != nil {
 			s.logger.Error("Cycle failed", zap.Error(err))
 		}
-	}()
+	}(uid)
 	s.redirect(w, r, "/")
 }
 
 func (s *Server) handleTopics(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	topics, _ := s.topics.List(ctx, 50)
+	topics, _ := s.topics.List(ctx, userFromCtx(ctx).ID, 50)
 	s.renderPageFlash(w, r, "topics", "Topics", map[string]interface{}{
 		"Topics":       topics,
 		"SearchQuery":  "",
@@ -876,13 +952,14 @@ func (s *Server) handleTopics(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleTopicSearch(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	uid := userFromCtx(ctx).ID
 	query := r.URL.Query().Get("q")
 	if query == "" {
 		http.Error(w, "Missing query", http.StatusBadRequest)
 		return
 	}
 
-	topics, _ := s.topics.List(ctx, 50)
+	topics, _ := s.topics.List(ctx, uid, 50)
 
 	examples, _ := s.examples.List(ctx, 10)
 	var exampleBodies []string
@@ -890,7 +967,7 @@ func (s *Server) handleTopicSearch(w http.ResponseWriter, r *http.Request) {
 		exampleBodies = append(exampleBodies, ex.Body)
 	}
 
-	history, _ := s.topics.RecentTitles(ctx, topicHistoryLookback)
+	history, _ := s.topics.RecentTitles(ctx, uid, topicHistoryLookback)
 	// Also avoid repeating anything shown in a previous search this session,
 	// even if the user never clicked "+Add" (so it was never persisted to the
 	// DB history above).
@@ -930,6 +1007,7 @@ func (s *Server) handleAddTopic(w http.ResponseWriter, r *http.Request) {
 	}
 
 	topic := &models.Topic{
+		UserID:  userFromCtx(ctx).ID,
 		Title:   title,
 		URL:     r.FormValue("url"),
 		Summary: r.FormValue("summary"),
@@ -970,6 +1048,7 @@ func (s *Server) generateFromAddedTopic(topic models.Topic) {
 		s.logger.Warn("Failed to generate draft for added topic", zap.String("topic", topic.Title), zap.Error(err))
 		return
 	}
+	draft.UserID = topic.UserID
 	draft.TopicID = topic.ID
 	if err := s.drafts.Insert(ctx, draft); err != nil {
 		s.logger.Warn("Failed to store draft for added topic", zap.String("topic", topic.Title), zap.Error(err))
@@ -984,6 +1063,11 @@ func (s *Server) generateFromAddedTopic(topic models.Topic) {
 func (s *Server) handleDeleteTopic(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := r.PathValue("id")
+	// Ownership guard: only delete a topic the current user owns.
+	if t, err := s.topics.GetByID(ctx, id); err != nil || t.UserID != userFromCtx(ctx).ID {
+		s.redirect(w, r, "/topics?err=Topic+not+found")
+		return
+	}
 	if err := s.topics.Delete(ctx, id); err != nil {
 		s.logger.Error("Failed to delete topic", zap.Error(err))
 	}
@@ -992,6 +1076,6 @@ func (s *Server) handleDeleteTopic(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCycles(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	cycles, _ := s.cycles.List(ctx, 20)
+	cycles, _ := s.cycles.List(ctx, userFromCtx(ctx).ID, 20)
 	s.renderPageFlash(w, r, "cycles", "Cycles", cycles)
 }

@@ -45,9 +45,9 @@ func (r *CycleRepo) Skip(ctx context.Context, id string) error {
 	return err
 }
 
-func (r *CycleRepo) List(ctx context.Context, limit int) ([]models.Cycle, error) {
+func (r *CycleRepo) List(ctx context.Context, userID string, limit int) ([]models.Cycle, error) {
 	opts := options.Find().SetSort(bson.M{"started_at": -1}).SetLimit(int64(limit))
-	cursor, err := r.coll.Find(ctx, bson.M{}, opts)
+	cursor, err := r.coll.Find(ctx, bson.M{"user_id": userID}, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -62,8 +62,9 @@ func (r *CycleRepo) List(ctx context.Context, limit int) ([]models.Cycle, error)
 // or after `since`. Used to make the daily auto-generate job idempotent and
 // self-healing: check "did today's run already happen?" and only run it if
 // not — catching up after sleep/downtime instead of silently skipping days.
-func (r *CycleRepo) HasRunSince(ctx context.Context, trigger string, since time.Time) (bool, error) {
+func (r *CycleRepo) HasRunSince(ctx context.Context, userID, trigger string, since time.Time) (bool, error) {
 	count, err := r.coll.CountDocuments(ctx, bson.M{
+		"user_id":    userID,
 		"trigger":    trigger,
 		"started_at": bson.M{"$gte": since},
 	})

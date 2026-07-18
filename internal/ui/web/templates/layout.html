@@ -39,6 +39,20 @@
   <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark/light theme" title="Toggle dark/light theme">
     <span class="theme-icon-dark">🌙</span><span class="theme-icon-light">☀️</span>
   </button>
+  {{if .User}}
+  <div class="user-menu">
+    <button type="button" class="user-btn" id="user-btn" aria-haspopup="true" aria-expanded="false" title="{{.User.Name}}">
+      {{if .User.Picture}}<img src="{{.User.Picture}}" alt="" referrerpolicy="no-referrer">{{else}}<span class="user-initial">{{firstChar .User.Name}}</span>{{end}}
+    </button>
+    <div class="user-dropdown" id="user-dropdown">
+      <div class="user-info">
+        <div class="user-name">{{.User.Name}}</div>
+        {{if .User.Email}}<div class="user-email">{{.User.Email}}</div>{{end}}
+      </div>
+      <form method="POST" action="/logout"><button type="submit" class="user-logout">Sign out</button></form>
+    </div>
+  </div>
+  {{end}}
 </nav>
 <div class="container">
   {{if .Error}}<div class="alert alert-error">⚠️ {{.Error}}</div>{{end}}

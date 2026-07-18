@@ -16,6 +16,7 @@ import (
 	"github.com/clodura/linkedin-post-agent/internal/config"
 	"github.com/clodura/linkedin-post-agent/internal/generator"
 	"github.com/clodura/linkedin-post-agent/internal/llm"
+	"github.com/clodura/linkedin-post-agent/internal/models"
 	"github.com/clodura/linkedin-post-agent/internal/publisher"
 	"github.com/clodura/linkedin-post-agent/internal/research"
 	"github.com/clodura/linkedin-post-agent/internal/scheduler"
@@ -24,9 +25,6 @@ import (
 )
 
 func main() {
-	runOnce := flag.Bool("once", false, "Run one cycle and exit")
-	auth := flag.Bool("auth", false, "Run LinkedIn OAuth2 flow")
-	code := flag.String("code", "", "OAuth2 authorization code (used with -auth)")
 	serve := flag.Bool("serve", false, "Start web UI server")
 	// Default the listen address to $PORT when set (Render, Railway, Koyeb, Fly,
 	// Cloud Run all inject it), falling back to :8081 for local dev. An explicit
@@ -61,15 +59,6 @@ func main() {
 	}
 	defer mdb.Close(ctx)
 
-	if *auth {
-		if *code != "" {
-			runAuthExchange(ctx, cfg, *code, logger)
-		} else {
-			showAuthURL(cfg, logger)
-		}
-		return
-	}
-
 	llmClient, err := llm.NewFromConfig(cfg, logger)
 	if err != nil {
 		logger.Fatal("Failed to create LLM client", zap.Error(err))
@@ -84,6 +73,8 @@ func main() {
 	topicRepo := storage.NewTopicRepo(mdb)
 	publishedRepo := storage.NewPublishedRepo(mdb)
 	cycleRepo := storage.NewCycleRepo(mdb)
+	userRepo := storage.NewUserRepo(mdb)
+	sessionRepo := storage.NewSessionRepo(mdb)
 
 	rssFetcher := research.NewRSSFetcher(nil, logger)
 	newsFetcher := research.NewNewsAPIFetcher(cfg.NewsAPI.APIKey, nil, logger)
@@ -92,23 +83,28 @@ func main() {
 	gen := generator.NewLLMGenerator(llmClient, logger)
 	voice := generator.BrandVoiceFromConfig(cfg)
 
-	var pub *publisher.Client
-	if cfg.LinkedIn.ClientID != "" {
-		pub = publisher.NewClient(cfg.LinkedIn, logger)
-		pub.SetImageGen(publisher.ImageGenConfig{
-			Provider:    cfg.Image.Provider,
-			OpenAIKey:   cfg.Image.OpenAIKey,
-			OpenAIModel: cfg.Image.OpenAIModel,
-			GeminiKey:   cfg.Gemini.APIKey,
-			GeminiModel: cfg.Image.GeminiModel,
-		})
-		if pub.IsConfigured() {
-			logger.Info("LinkedIn publisher configured")
-		} else {
-			logger.Warn("LinkedIn publisher not fully configured, posts will be saved as drafts only")
-		}
-	} else {
-		logger.Warn("LinkedIn credentials not set, posts will be saved as drafts only")
+	imageGen := publisher.ImageGenConfig{
+		Provider:    cfg.Image.Provider,
+		OpenAIKey:   cfg.Image.OpenAIKey,
+		OpenAIModel: cfg.Image.OpenAIModel,
+		GeminiKey:   cfg.Gemini.APIKey,
+		GeminiModel: cfg.Image.GeminiModel,
+	}
+
+	// newPublisher builds a LinkedIn client authored by a specific user, using
+	// that user's own OAuth tokens — so every post goes to the poster's account.
+	newPublisher := func(u *models.User) *publisher.Client {
+		c := publisher.NewClient(config.LinkedInConfig{
+			ClientID:     cfg.LinkedIn.ClientID,
+			ClientSecret: cfg.LinkedIn.ClientSecret,
+			RedirectURI:  cfg.LinkedIn.RedirectURI,
+			APIVersion:   cfg.LinkedIn.APIVersion,
+			AccessToken:  u.AccessToken,
+			RefreshToken: u.RefreshToken,
+			PersonID:     u.ID,
+		}, logger)
+		c.SetImageGen(imageGen)
+		return c
 	}
 
 	exampleStore := analyzer.NewExampleStore(mdb.DB(), logger)
@@ -120,22 +116,22 @@ func main() {
 		topicRepo,
 		publishedRepo,
 		cycleRepo,
-		pub,
+		userRepo,
 		voice,
 		exampleStore,
-		cfg.Agent.AutoPublish,
+		newPublisher,
 		logger,
 	)
 
-	sched := scheduler.New(agt, cfg.Agent.Schedule, cfg.Agent.TopicsCount, cfg.Agent.PublishDays, logger)
+	sched := scheduler.New(agt, logger)
 
 	if *serve {
-		webServer := webui.NewServer(*addr, logger, agt, exampleStore, draftRepo, topicRepo, publishedRepo, cycleRepo, gen, voice, cfg.Agent.TopicsCount)
+		webServer := webui.NewServer(*addr, logger, agt, exampleStore, draftRepo, topicRepo, publishedRepo, cycleRepo, userRepo, sessionRepo, cfg.LinkedIn, gen, voice, cfg.Agent.TopicsCount)
 		if err := webServer.Start(); err != nil {
 			logger.Fatal("Failed to start web server", zap.Error(err))
 		}
 
-		logger.Info("Web UI available", zap.String("url", fmt.Sprintf("http://localhost%s", *addr)))
+		logger.Info("Web UI available", zap.String("addr", *addr))
 		fmt.Printf("\n  Open http://localhost%s in your browser\n\n", *addr)
 
 		if err := sched.Start(ctx); err != nil {
@@ -148,13 +144,8 @@ func main() {
 		return
 	}
 
-	if *runOnce {
-		if err := sched.RunOnce(ctx); err != nil {
-			logger.Fatal("RunOnce failed", zap.Error(err))
-		}
-		return
-	}
-
+	// Headless: run only the publish poller (publishes each user's scheduled
+	// posts with their own tokens).
 	if err := sched.Start(ctx); err != nil {
 		logger.Fatal("Failed to start scheduler", zap.Error(err))
 	}
@@ -162,47 +153,4 @@ func main() {
 	<-sigCh
 	logger.Info("Shutting down...")
 	sched.Stop()
-}
-
-func showAuthURL(cfg *config.Config, logger *zap.Logger) {
-	pub := publisher.NewClient(cfg.LinkedIn, logger)
-
-	state := "linkedin-post-agent"
-	authURL := pub.AuthURL(state)
-
-	fmt.Println("\n─── LinkedIn OAuth2 Authorization ───")
-	fmt.Println()
-	fmt.Println("1. Open this URL in your browser:")
-	fmt.Println()
-	fmt.Println(authURL)
-	fmt.Println()
-	fmt.Println("2. Authorize the application")
-	fmt.Println("3. You'll be redirected to your redirect URI with a ?code= parameter")
-	fmt.Println("4. Copy the code and run:")
-	fmt.Println()
-	fmt.Printf("   %s -auth -code=YOUR_CODE\n", os.Args[0])
-	fmt.Println()
-}
-
-func runAuthExchange(ctx context.Context, cfg *config.Config, authCode string, logger *zap.Logger) {
-	pub := publisher.NewClient(cfg.LinkedIn, logger)
-
-	if err := pub.ExchangeCode(ctx, authCode); err != nil {
-		logger.Fatal("Failed to exchange code", zap.Error(err))
-	}
-
-	personID, err := pub.SetPersonID(ctx)
-	if err != nil {
-		logger.Fatal("Failed to get person ID", zap.Error(err))
-	}
-
-	fmt.Println("\n─── Authentication Successful ───")
-	fmt.Println()
-	fmt.Printf("LinkedIn Person ID: %s\n", personID)
-	fmt.Println()
-	fmt.Println("Add these to your .env file:")
-	fmt.Printf("LINKEDIN_ACCESS_TOKEN=%s\n", pub.AccessToken())
-	fmt.Printf("LINKEDIN_REFRESH_TOKEN=%s\n", pub.RefreshTokenStr())
-	fmt.Printf("LINKEDIN_PERSON_ID=%s\n", personID)
-	fmt.Println()
 }

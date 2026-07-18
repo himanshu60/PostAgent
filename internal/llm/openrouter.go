@@ -31,8 +31,8 @@ func NewOpenRouterClient(cfg config.OpenRouterConfig, model string) *OpenRouterC
 }
 
 type openRouterRequest struct {
-	Model    string             `json:"model"`
-	Messages []openRouterMsg    `json:"messages"`
+	Model    string          `json:"model"`
+	Messages []openRouterMsg `json:"messages"`
 }
 
 type openRouterMsg struct {

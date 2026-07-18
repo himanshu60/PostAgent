@@ -140,8 +140,8 @@ func (r *DraftRepo) UpdateHashtags(ctx context.Context, id string, hashtags []st
 	return err
 }
 
-func (r *DraftRepo) List(ctx context.Context, status string, limit int) ([]models.Draft, error) {
-	filter := bson.M{}
+func (r *DraftRepo) List(ctx context.Context, userID, status string, limit int) ([]models.Draft, error) {
+	filter := bson.M{"user_id": userID}
 	if status != "" {
 		filter["status"] = status
 	}

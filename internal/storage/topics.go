@@ -47,9 +47,9 @@ func (r *TopicRepo) InsertMany(ctx context.Context, topics []models.Topic) error
 	return err
 }
 
-func (r *TopicRepo) List(ctx context.Context, limit int) ([]models.Topic, error) {
+func (r *TopicRepo) List(ctx context.Context, userID string, limit int) ([]models.Topic, error) {
 	opts := options.Find().SetSort(bson.M{"created_at": -1}).SetLimit(int64(limit))
-	cursor, err := r.coll.Find(ctx, bson.M{}, opts)
+	cursor, err := r.coll.Find(ctx, bson.M{"user_id": userID}, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -65,8 +65,8 @@ func (r *TopicRepo) List(ctx context.Context, limit int) ([]models.Topic, error)
 // by the on-demand generate flow) already have a draft the moment they're
 // created and are never meant to be picked up again, so they must never leak
 // into this queue.
-func (r *TopicRepo) GetUnused(ctx context.Context, source string, limit int) ([]models.Topic, error) {
-	filter := bson.M{"used": false, "source": source}
+func (r *TopicRepo) GetUnused(ctx context.Context, userID, source string, limit int) ([]models.Topic, error) {
+	filter := bson.M{"used": false, "source": source, "user_id": userID}
 	opts := options.Find().SetLimit(int64(limit)).SetSort(bson.M{"created_at": -1})
 	cursor, err := r.coll.Find(ctx, filter, opts)
 	if err != nil {
@@ -102,12 +102,12 @@ func (r *TopicRepo) Delete(ctx context.Context, id string) error {
 
 // RecentTitles returns the titles of the most recently created topics, used
 // to check new candidates against everything already covered.
-func (r *TopicRepo) RecentTitles(ctx context.Context, limit int) ([]string, error) {
+func (r *TopicRepo) RecentTitles(ctx context.Context, userID string, limit int) ([]string, error) {
 	opts := options.Find().
 		SetProjection(bson.M{"title": 1}).
 		SetSort(bson.M{"created_at": -1}).
 		SetLimit(int64(limit))
-	cursor, err := r.coll.Find(ctx, bson.M{}, opts)
+	cursor, err := r.coll.Find(ctx, bson.M{"user_id": userID}, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -124,8 +124,8 @@ func (r *TopicRepo) RecentTitles(ctx context.Context, limit int) ([]string, erro
 	return titles, nil
 }
 
-func (r *TopicRepo) ExistsByURL(ctx context.Context, url string) (bool, error) {
-	count, err := r.coll.CountDocuments(ctx, bson.M{"url": url})
+func (r *TopicRepo) ExistsByURL(ctx context.Context, userID, url string) (bool, error) {
+	count, err := r.coll.CountDocuments(ctx, bson.M{"url": url, "user_id": userID})
 	if err != nil {
 		return false, err
 	}
