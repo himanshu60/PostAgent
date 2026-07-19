@@ -65,6 +65,140 @@
   </div>
 </div>
 
+<h2 style="font-size:15px;font-weight:650;margin:26px 6px 14px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;">Run your own PostAgent (post to your own account)</h2>
+
+<div class="card" style="border:1px solid var(--border-strong);">
+  <div class="card-header"><span class="card-icon">🔐</span><h2>Why you need your own instance</h2></div>
+  <p style="color:var(--text-muted);font-size:14px;line-height:1.7;">
+    LinkedIn only lets an app post on behalf of <strong>its owner and approved team members</strong> until the app passes LinkedIn's review for the "Share on LinkedIn" product. So on this shared instance, only the operator can publish. To have PostAgent post to <strong>your</strong> account, deploy your <strong>own</strong> copy with your <strong>own</strong> LinkedIn app — it's free and takes ~20 minutes. Every step is below.
+  </p>
+</div>
+
+<div class="card">
+  <div class="card-header"><span class="card-icon">🧰</span><h2>Before you start — free accounts you'll need</h2></div>
+  <ul style="color:var(--text-muted);font-size:14px;line-height:1.9;margin:0;padding-left:20px;">
+    <li><strong>GitHub</strong> — to fork the code · <a href="https://github.com/signup" target="_blank">github.com/signup</a></li>
+    <li><strong>MongoDB Atlas</strong> (free M0 database) · <a href="https://www.mongodb.com/cloud/atlas/register" target="_blank">mongodb.com/cloud/atlas</a></li>
+    <li><strong>Google Gemini API</strong> (free, writes the posts) · <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a></li>
+    <li><strong>LinkedIn Developer app</strong> (your posting app) · <a href="https://www.linkedin.com/developers/apps" target="_blank">linkedin.com/developers/apps</a></li>
+    <li><strong>Render</strong> (free hosting) · <a href="https://render.com" target="_blank">render.com</a></li>
+    <li><strong>UptimeRobot</strong> (free, keeps it awake) · <a href="https://uptimerobot.com" target="_blank">uptimerobot.com</a></li>
+  </ul>
+</div>
+
+<div class="card">
+  <div class="card-header"><span class="card-icon">1️⃣</span><h2>Fork the code</h2></div>
+  <p style="color:var(--text-muted);font-size:14px;line-height:1.7;">
+    Open <a href="https://github.com/himanshu60/PostAgent" target="_blank">github.com/himanshu60/PostAgent</a> and click <strong>Fork</strong> (top-right) to copy it to your own GitHub. That's the repo Render will deploy. To run it locally instead:
+  </p>
+  <pre style="background:var(--input-bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;overflow-x:auto;font-size:12.5px;margin-top:10px;"><code>git clone https://github.com/&lt;you&gt;/PostAgent.git
+cd PostAgent
+cp .env.example .env   # fill in the values from the table below
+go run ./cmd/agent -serve   # http://localhost:8081</code></pre>
+</div>
+
+<div class="card">
+  <div class="card-header"><span class="card-icon">2️⃣</span><h2>MongoDB Atlas (database)</h2></div>
+  <ol style="color:var(--text-muted);font-size:14px;line-height:1.8;margin:0;padding-left:20px;">
+    <li>Create a free <strong>M0</strong> cluster.</li>
+    <li><strong>Database Access</strong> → add a user + password.</li>
+    <li><strong>Network Access</strong> → add <code>0.0.0.0/0</code> (allow anywhere).</li>
+    <li><strong>Connect → Drivers</strong> → copy the connection string. That's your <code>MONGO_URI</code>.</li>
+  </ol>
+</div>
+
+<div class="card">
+  <div class="card-header"><span class="card-icon">3️⃣</span><h2>Gemini API key</h2></div>
+  <p style="color:var(--text-muted);font-size:14px;line-height:1.7;">Go to <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a> → <strong>Create API key</strong> → copy it. That's your <code>GEMINI_API_KEY</code>. (Keep images on <strong>Pollinations</strong> — it's free and needs no key. Gemini image generation needs paid billing.)</p>
+</div>
+
+<div class="card">
+  <div class="card-header"><span class="card-icon">4️⃣</span><h2>LinkedIn app (your posting app)</h2></div>
+  <ol style="color:var(--text-muted);font-size:14px;line-height:1.8;margin:0;padding-left:20px;">
+    <li>Create an app at <a href="https://www.linkedin.com/developers/apps" target="_blank">linkedin.com/developers/apps</a>.</li>
+    <li><strong>Products</strong> → add <strong>"Sign In with LinkedIn using OpenID Connect"</strong> and <strong>"Share on LinkedIn"</strong>.</li>
+    <li><strong>Auth</strong> tab → copy <strong>Client ID</strong> and <strong>Client Secret</strong>.</li>
+    <li><strong>Auth → Authorized redirect URLs</strong> → add your deployed URL's callback (fill this in after step 5):<br>
+      <code>https://&lt;your-service&gt;.onrender.com/auth/callback</code><br>
+      and for local testing: <code>http://localhost:8081/auth/callback</code></li>
+  </ol>
+</div>
+
+<div class="card">
+  <div class="card-header"><span class="card-icon">5️⃣</span><h2>Deploy on Render (free)</h2></div>
+  <ol style="color:var(--text-muted);font-size:14px;line-height:1.8;margin:0;padding-left:20px;">
+    <li><a href="https://dashboard.render.com" target="_blank">dashboard.render.com</a> → <strong>New → Web Service</strong>.</li>
+    <li>Connect your forked <strong>PostAgent</strong> repo (or use <strong>Public Git Repository</strong> and paste its URL).</li>
+    <li>Render auto-detects the <strong>Dockerfile</strong> — keep defaults. <strong>Instance type: Free</strong>.</li>
+    <li>Add the <strong>environment variables</strong> from the table below.</li>
+    <li><strong>Create Web Service.</strong> When live, copy your URL and put its <code>/auth/callback</code> back into the LinkedIn app (step 4.4).</li>
+  </ol>
+</div>
+
+<div class="card">
+  <div class="card-header"><span class="card-icon">🔑</span><h2>All environment variables</h2></div>
+  <p style="color:var(--text-muted);font-size:13.5px;line-height:1.6;margin-bottom:12px;"><strong>Required</strong> (the app won't work without these):</p>
+  <div style="overflow-x:auto;">
+  <table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:520px;">
+    <thead><tr style="text-align:left;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em;font-size:11px;">
+      <th style="padding:8px 10px;border-bottom:1px solid var(--border);">Variable</th>
+      <th style="padding:8px 10px;border-bottom:1px solid var(--border);">What it's for / where to get it</th>
+    </tr></thead>
+    <tbody style="color:var(--text-muted);">
+      <tr><td style="padding:8px 10px;border-bottom:1px solid var(--border);"><code>MONGO_URI</code></td><td style="padding:8px 10px;border-bottom:1px solid var(--border);">Database — the Atlas connection string (step 2)</td></tr>
+      <tr><td style="padding:8px 10px;border-bottom:1px solid var(--border);"><code>GEMINI_API_KEY</code></td><td style="padding:8px 10px;border-bottom:1px solid var(--border);">Writes the posts — from Google AI Studio (step 3)</td></tr>
+      <tr><td style="padding:8px 10px;border-bottom:1px solid var(--border);"><code>LINKEDIN_CLIENT_ID</code></td><td style="padding:8px 10px;border-bottom:1px solid var(--border);">Your LinkedIn app → Auth (step 4)</td></tr>
+      <tr><td style="padding:8px 10px;border-bottom:1px solid var(--border);"><code>LINKEDIN_CLIENT_SECRET</code></td><td style="padding:8px 10px;border-bottom:1px solid var(--border);">Your LinkedIn app → Auth (step 4)</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p style="color:var(--text-muted);font-size:13.5px;line-height:1.6;margin:18px 0 12px;"><strong>Recommended</strong> — copy these exact demo values to start:</p>
+  <pre style="background:var(--input-bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;overflow-x:auto;font-size:12px;line-height:1.7;"><code>LLM_PROVIDER=gemini
+LLM_MODEL=gemini-2.5-flash
+GEMINI_MODEL=gemini-2.5-flash
+IMAGE_PROVIDER=pollinations
+LINKEDIN_API_VERSION=202606
+MONGO_DB=linkedin_agent
+AGENT_SCHEDULE=CRON_TZ=Asia/Kolkata 0 0 9 * * *
+AGENT_PUBLISH_DAYS=Mon,Wed,Fri
+AGENT_TOPICS_COUNT=5
+BRAND_VOICE_TONE=professional
+BRAND_VOICE_MAX_EMOJI=3
+BRAND_VOICE_MIN_LINE_BREAKS=3
+LOG_LEVEL=info</code></pre>
+
+  <p style="color:var(--text-muted);font-size:13.5px;line-height:1.6;margin:18px 0 12px;"><strong>Optional</strong> (leave unset unless you need them):</p>
+  <div style="overflow-x:auto;">
+  <table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:520px;">
+    <tbody style="color:var(--text-muted);">
+      <tr><td style="padding:8px 10px;border-bottom:1px solid var(--border);"><code>LLM_FALLBACK_PROVIDER</code> / <code>OPENROUTER_API_KEY</code></td><td style="padding:8px 10px;border-bottom:1px solid var(--border);">Backup LLM if Gemini hits its quota (<a href="https://openrouter.ai/keys" target="_blank">openrouter.ai</a>)</td></tr>
+      <tr><td style="padding:8px 10px;border-bottom:1px solid var(--border);"><code>NEWSAPI_KEY</code></td><td style="padding:8px 10px;border-bottom:1px solid var(--border);">Extra trending-topic source (<a href="https://newsapi.org" target="_blank">newsapi.org</a>)</td></tr>
+      <tr><td style="padding:8px 10px;border-bottom:1px solid var(--border);"><code>OPENAI_API_KEY</code></td><td style="padding:8px 10px;border-bottom:1px solid var(--border);">Only if <code>IMAGE_PROVIDER=openai</code></td></tr>
+      <tr><td style="padding:8px 10px;"><code>PORT</code></td><td style="padding:8px 10px;">Render sets this automatically — do <strong>not</strong> add it</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="alert alert-error" style="margin-top:16px;">
+    ⚠️ Do <strong>not</strong> set <code>LINKEDIN_ACCESS_TOKEN</code>, <code>LINKEDIN_REFRESH_TOKEN</code>, or <code>LINKEDIN_PERSON_ID</code> — these are captured automatically when you sign in with LinkedIn.
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><span class="card-icon">6️⃣</span><h2>Keep it awake (so posts publish on time)</h2></div>
+  <p style="color:var(--text-muted);font-size:14px;line-height:1.7;">
+    Render's free tier sleeps after 15 minutes of no traffic, so scheduled posts would go out late. Fix it free: at <a href="https://uptimerobot.com" target="_blank">uptimerobot.com</a> → <strong>Add New Monitor → HTTP(s)</strong> → your Render URL → interval <strong>5 minutes</strong>. Now the scheduler runs 24/7 and posts publish exactly on time.
+  </p>
+</div>
+
+<div class="card">
+  <div class="card-header"><span class="card-icon">7️⃣</span><h2>Sign in and go</h2></div>
+  <p style="color:var(--text-muted);font-size:14px;line-height:1.7;">
+    Open your Render URL → <strong>Sign in with LinkedIn</strong> → authorize. You're in your own private workspace, posting to your own account. Type a topic → <strong>Generate Posts</strong>, or let the daily auto-generate create and schedule posts for you.
+  </p>
+</div>
+
 <div class="card" style="text-align:center;padding:30px;">
   <h2 style="margin-bottom:6px;">Ready to post?</h2>
   <p style="color:var(--text-muted);font-size:14px;margin-bottom:18px;">Head to the dashboard and generate your first post.</p>
