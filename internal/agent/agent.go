@@ -171,6 +171,92 @@ func (a *Agent) Generate(ctx context.Context, userID string, topicCount int) ([]
 	return drafts, nil
 }
 
+// DailyAutoTrigger tags cycles created by the once-a-day auto-generate job.
+const DailyAutoTrigger = "daily_auto"
+
+// EnsureDailyPosts runs the idempotent per-user auto-generate for every user:
+// for each, if they don't already have a post scheduled for the target day (and
+// today's auto job hasn't run for them), research a fresh topic, generate a
+// post, and schedule it for publishAt. Safe to call from cron/startup/periodic.
+func (a *Agent) EnsureDailyPosts(ctx context.Context, publishAt time.Time, loc *time.Location) {
+	users, err := a.users.List(ctx)
+	if err != nil {
+		a.logger.Warn("Auto-generate: failed to list users", zap.Error(err))
+		return
+	}
+	for i := range users {
+		a.ensureDailyPostForUser(ctx, &users[i], publishAt, loc)
+	}
+}
+
+func (a *Agent) ensureDailyPostForUser(ctx context.Context, user *models.User, publishAt time.Time, loc *time.Location) {
+	now := time.Now().In(loc)
+	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+
+	// Already auto-generated for this user today? Skip (idempotent / self-healing).
+	if ran, err := a.cycles.HasRunSince(ctx, user.ID, DailyAutoTrigger, startOfDay.UTC()); err == nil && ran {
+		return
+	}
+	// Target day already has a scheduled post for this user? Skip (one/day).
+	pubLocal := publishAt.In(loc)
+	dayStart := time.Date(pubLocal.Year(), pubLocal.Month(), pubLocal.Day(), 0, 0, 0, 0, loc)
+	if n, err := a.drafts.CountScheduledBetween(ctx, user.ID, "", dayStart.UTC(), dayStart.Add(24*time.Hour).UTC()); err == nil && n > 0 {
+		return
+	}
+
+	cycle := &models.Cycle{UserID: user.ID, Status: models.CycleStatusRunning, Trigger: DailyAutoTrigger}
+	if err := a.cycles.Insert(ctx, cycle); err != nil {
+		a.logger.Warn("Auto-generate: create cycle failed", zap.String("user_id", user.ID), zap.Error(err))
+		return
+	}
+
+	topic, err := a.pickFreshTopicForUser(ctx, user.ID)
+	if err != nil {
+		a.logger.Info("Auto-generate: no fresh topic, skipping", zap.String("user_id", user.ID))
+		a.cycles.Skip(ctx, cycle.ID)
+		return
+	}
+	topic.UserID = user.ID
+	if err := a.topics.Insert(ctx, topic); err != nil {
+		a.logger.Warn("Auto-generate: store topic failed", zap.Error(err))
+	}
+
+	draft, err := a.generator.GenerateFromTopic(ctx, *topic, a.voice, a.loadStyleGuide(ctx))
+	if err != nil {
+		a.cycles.Skip(ctx, cycle.ID)
+		return
+	}
+	draft.UserID = user.ID
+	draft.CycleID = cycle.ID
+	if err := a.drafts.Insert(ctx, draft); err != nil {
+		a.cycles.Skip(ctx, cycle.ID)
+		return
+	}
+	a.cycles.AddDraft(ctx, cycle.ID, draft.ID)
+	a.drafts.UpdateScheduledFor(ctx, draft.ID, publishAt)
+	a.drafts.UpdateStatus(ctx, draft.ID, models.DraftStatusApproved)
+	a.cycles.Complete(ctx, cycle.ID)
+	a.logger.Info("Auto-generated and scheduled a post",
+		zap.String("user_id", user.ID), zap.String("draft_id", draft.ID), zap.Time("publish_at", publishAt))
+}
+
+// pickFreshTopicForUser finds one trending topic this user hasn't covered.
+func (a *Agent) pickFreshTopicForUser(ctx context.Context, userID string) (*models.Topic, error) {
+	history, _ := a.topics.RecentTitles(ctx, userID, topicHistoryWindow)
+	fetched, _ := a.research.Fetch(ctx, dailyTopicPoolSize)
+	for _, t := range a.relevantTrendingTopics(ctx, fetched) {
+		if research.IsDuplicateTitle(t.Title, history) {
+			continue
+		}
+		if exists, _ := a.topics.ExistsByURL(ctx, userID, t.URL); exists {
+			continue
+		}
+		model := t.ToModel()
+		return &model, nil
+	}
+	return nil, fmt.Errorf("no fresh topic")
+}
+
 func (a *Agent) loadStyleGuide(ctx context.Context) string {
 	if a.exampleStore == nil {
 		return ""

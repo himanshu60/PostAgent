@@ -103,8 +103,9 @@ func (r *DraftRepo) UpdateMedia(ctx context.Context, id string, media *models.Me
 // excludeID) are scheduled in [start, end). Used to enforce at most one
 // scheduled post per calendar day: both manual (re)scheduling and the weekly
 // auto-generator check the target day and move to the next free one.
-func (r *DraftRepo) CountScheduledBetween(ctx context.Context, excludeID string, start, end time.Time) (int64, error) {
+func (r *DraftRepo) CountScheduledBetween(ctx context.Context, userID, excludeID string, start, end time.Time) (int64, error) {
 	filter := bson.M{
+		"user_id":       userID,
 		"_id":           bson.M{"$ne": excludeID},
 		"status":        models.DraftStatusApproved,
 		"scheduled_for": bson.M{"$gte": start, "$lt": end},

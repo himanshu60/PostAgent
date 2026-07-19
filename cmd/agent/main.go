@@ -124,7 +124,7 @@ func main() {
 		logger,
 	)
 
-	sched := scheduler.New(agt, logger)
+	sched := scheduler.New(agt, cfg.Agent.Schedule, cfg.Agent.PublishDays, logger)
 
 	if *serve {
 		webServer := webui.NewServer(*addr, logger, agt, exampleStore, draftRepo, topicRepo, publishedRepo, cycleRepo, userRepo, sessionRepo, mediaRepo, cfg.LinkedIn, gen, voice, cfg.Agent.TopicsCount)

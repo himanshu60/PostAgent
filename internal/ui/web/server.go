@@ -501,7 +501,7 @@ func (s *Server) handleDraftSchedule(w http.ResponseWriter, r *http.Request) {
 	for i := 0; i < 60; i++ {
 		dayStart := time.Date(target.Year(), target.Month(), target.Day(), 0, 0, 0, 0, loc)
 		dayEnd := dayStart.Add(24 * time.Hour)
-		n, cerr := s.drafts.CountScheduledBetween(ctx, id, dayStart.UTC(), dayEnd.UTC())
+		n, cerr := s.drafts.CountScheduledBetween(ctx, userFromCtx(ctx).ID, id, dayStart.UTC(), dayEnd.UTC())
 		if cerr != nil {
 			s.logger.Warn("Day-conflict check failed, scheduling anyway", zap.Error(cerr))
 			break
