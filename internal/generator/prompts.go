@@ -80,9 +80,16 @@ Angle 3: <title> | <hook>`, input.Title, input.Summary, formatKeywords(input.Key
 // 💬 question — but frames the points differently. The numbered "emoji N.
 // heading" line format is load-bearing: normalizeBody/boldHeadings depend on
 // it for spacing and Unicode-bold styling.
+// postStructures are genuinely different post SHAPES (not the same skeleton
+// reworded) so a feed of these doesn't look templated. Some are numbered lists,
+// some are prose/story/opinion with no list at all. The numbered "emoji N.
+// heading" line format (where used) is load-bearing: normalizeBody/boldHeadings
+// style it. Non-list formats pass through untouched.
 var postStructures = []string{
-	// 1. Classic teaching breakdown
-	`<1-2 line hook that grabs attention>
+	// 1. Listicle — classic teaching breakdown (5 points)
+	`FORMAT: Numbered listicle (5 points).
+
+<1-2 line hook that grabs attention>
 
 <1-2 line intro explaining why this matters>
 
@@ -98,74 +105,75 @@ var postStructures = []string{
 
 💬 <one discussion question to encourage comments>`,
 
-	// 2. Myth vs reality
-	`<1-2 line hook challenging a common belief about the topic>
+	// 2. Story / personal lesson — NO numbered list
+	`FORMAT: First-person story with a lesson. Do NOT use any numbered list.
 
-<1-2 line intro: why these misconceptions cost engineers real time/money>
+<1-2 line hook that drops the reader into a moment or realization>
 
-<emoji> 1. <a common myth about the topic, stated as the myth>
-Reality: <1-2 lines correcting it>
+<3 to 5 SHORT paragraphs (1-3 lines each) telling a concrete story or experience related to the topic — a problem faced, what happened, the turn, the insight. Conversational, human, specific. No bullet points, no numbers.>
 
-(continue for exactly 5 numbered myths, each with a different leading emoji and a "Reality:" line)
+💡 The lesson: <1-2 lines with the takeaway the story earned>
+
+💬 <one discussion question inviting readers to share their own experience>`,
+
+	// 3. One big idea — a single insight explored, NO list
+	`FORMAT: One strong idea explored in prose. Do NOT use a numbered list.
+
+<1-2 line hook stating one counterintuitive or sharp idea about the topic>
+
+<2 to 4 SHORT paragraphs unpacking that single idea: what it means, why most people miss it, why it matters now. Flowing prose, not bullets.>
+
+📌 In practice:
+<one concrete real-world example that makes the idea click>
+
+💡 Takeaway: <one line>
+
+💬 <one discussion question>`,
+
+	// 4. Contrarian hot take — opinion piece, minimal structure
+	`FORMAT: Bold opinion / hot take. Punchy and short. No numbered list.
+
+<1-2 line bold, slightly contrarian claim about the topic that makes people stop>
+
+<2 to 3 SHORT paragraphs defending the claim with reasoning and a concrete detail, then adding one honest nuance ("to be fair...").>
+
+💡 Bottom line: <one sharp line>
+
+💬 <one discussion question that invites people to agree or push back>`,
+
+	// 5. Three quick lessons — a SHORT list of only 3 (different rhythm from 5)
+	`FORMAT: Three quick lessons. Only THREE points, kept tight.
+
+<1 line punchy hook>
+
+<1 line intro>
+
+<emoji> 1. <short heading>
+<1 line explanation>
+
+<emoji> 2. <short heading>
+<1 line explanation>
+
+<emoji> 3. <short heading>
+<1 line explanation>
+
+💡 Takeaway: <one line>
+
+💬 <one discussion question>`,
+
+	// 6. Before vs after / then vs now — comparison, no numbered list
+	`FORMAT: Then-vs-now (or myth-vs-reality) comparison in prose. No numbered list.
+
+<1-2 line hook contrasting an old way of thinking with a new one>
+
+<2 to 4 SHORT paragraphs walking through what changed: what people used to believe/do, what shifted, and what it means for engineers today.>
 
 📌 Example:
-<one concrete real-world example where believing a myth went wrong>
+<one concrete example of the shift>
 
-💡 Takeaway: <one valuable takeaway line>
+💡 Takeaway: <one line>
 
-💬 <one discussion question asking which myth readers have encountered>`,
-
-	// 3. Mistakes and fixes
-	`<1-2 line hook: a bold claim about mistakes people make with this topic>
-
-<2-3 line short personal-experience style intro ("I've seen this go wrong...")>
-
-<emoji> 1. <short heading naming the mistake>
-The fix: <1-2 lines on what to do instead>
-
-(continue for exactly 5 numbered mistakes, each with a different leading emoji and a "The fix:" line)
-
-📌 Example:
-<one concrete real-world example of the most costly mistake>
-
-💡 Takeaway: <one valuable takeaway line>
-
-💬 <one discussion question asking readers about mistakes they've seen>`,
-
-	// 4. Question-driven
-	`<1-2 line hook posed as the big question readers are asking>
-
-<1-2 line intro on why this question matters right now>
-
-<emoji> 1. <short question as the heading>
-<1-2 line direct answer>
-
-(continue for exactly 5 numbered questions, each with a different leading emoji)
-
-📌 Example:
-<one concrete real-world example that ties the answers together>
-
-💡 Takeaway: <one valuable takeaway line>
-
-💬 <one discussion question inviting readers' own answers>`,
-
-	// 5. Do this, not that
-	`<1-2 line hook contrasting how most people do it vs how experienced engineers do it>
-
-<1-2 line intro on the gap between the two>
-
-<emoji> 1. <short heading naming the practice>
-Do: <one line best practice>
-Not: <one line common anti-pattern>
-
-(continue for exactly 5 numbered practices, each with a different leading emoji and Do:/Not: lines)
-
-📌 Example:
-<one concrete real-world example showing the "Do" paying off>
-
-💡 Takeaway: <one valuable takeaway line>
-
-💬 <one discussion question to encourage comments>`,
+💬 <one discussion question>`,
 }
 
 func pickRandomStructure() string {
@@ -190,12 +198,13 @@ Write the post using EXACTLY this structure:
 Hashtags: <10-15 relevant hashtags starting with #>
 
 Rules:
-- Every numbered point MUST start with an emoji, the number, and a short heading on its OWN line, e.g. "🎯 1. Simplicity", with its explanation on the NEXT line(s).
-- Put a BLANK line between every section and every numbered point.
+- Follow the FORMAT above exactly. If it is a numbered list, every point MUST start with an emoji, the number, and a short heading on its OWN line (e.g. "🎯 1. Simplicity"), explanation on the next line(s). If it is a story/prose/opinion format, use short paragraphs and do NOT force a numbered list.
+- Put a BLANK line between every paragraph and section.
 - Explain in very simple English for a mixed audience (beginners, developers, managers, founders).
-- Use at most %d emojis beyond the point headings.
+- Use at most %d emojis beyond any section headings.
 - Keep the ENTIRE post under 2000 characters.
 - Do NOT use markdown like **, ##, or backticks. LinkedIn does not render them.
+- Do NOT print the "FORMAT: ..." line or any placeholder brackets in the output.
 
 IMPORTANT: Output ONLY the post starting directly with the hook. No title line, no preamble like "Here is the post".`,
 		title, summary, tone, styleGuide, structure, maxEmoji)

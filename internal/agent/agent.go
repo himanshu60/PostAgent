@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"time"
 
 	"go.uber.org/zap"
@@ -241,10 +242,15 @@ func (a *Agent) ensureDailyPostForUser(ctx context.Context, user *models.User, p
 }
 
 // pickFreshTopicForUser finds one trending topic this user hasn't covered.
+// The relevant pool is shuffled so different users (and different days) get
+// different topics from the same trending feed — avoiding two users' auto-posts
+// landing on the identical subject.
 func (a *Agent) pickFreshTopicForUser(ctx context.Context, userID string) (*models.Topic, error) {
 	history, _ := a.topics.RecentTitles(ctx, userID, topicHistoryWindow)
 	fetched, _ := a.research.Fetch(ctx, dailyTopicPoolSize)
-	for _, t := range a.relevantTrendingTopics(ctx, fetched) {
+	relevant := a.relevantTrendingTopics(ctx, fetched)
+	rand.Shuffle(len(relevant), func(i, j int) { relevant[i], relevant[j] = relevant[j], relevant[i] })
+	for _, t := range relevant {
 		if research.IsDuplicateTitle(t.Title, history) {
 			continue
 		}
