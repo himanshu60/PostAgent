@@ -211,8 +211,15 @@ func (a *Agent) ensureDailyPostForUser(ctx context.Context, user *models.User, p
 		return
 	}
 
-	topic, err := a.pickFreshTopicForUser(ctx, user.ID)
-	if err != nil {
+	// Prefer the user's own interests; fall back to trending if none set.
+	var topic *models.Topic
+	var err error
+	if len(user.Interests) > 0 {
+		topic, err = a.topicFromInterest(ctx, user)
+	} else {
+		topic, err = a.pickFreshTopicForUser(ctx, user.ID)
+	}
+	if err != nil || topic == nil {
 		a.logger.Info("Auto-generate: no fresh topic, skipping", zap.String("user_id", user.ID))
 		a.cycles.Skip(ctx, cycle.ID)
 		return
@@ -222,7 +229,12 @@ func (a *Agent) ensureDailyPostForUser(ctx context.Context, user *models.User, p
 		a.logger.Warn("Auto-generate: store topic failed", zap.Error(err))
 	}
 
-	draft, err := a.generator.GenerateFromTopic(ctx, *topic, a.voice, a.loadStyleGuide(ctx))
+	// Style guide + the user's designation so the post reads from their POV.
+	styleGuide := a.loadStyleGuide(ctx)
+	if user.Role != "" {
+		styleGuide += "\n\nWrite from the perspective of a " + user.Role + ", sharing practical, first-hand experience from that role."
+	}
+	draft, err := a.generator.GenerateFromTopic(ctx, *topic, a.voice, styleGuide)
 	if err != nil {
 		a.cycles.Skip(ctx, cycle.ID)
 		return
@@ -239,6 +251,27 @@ func (a *Agent) ensureDailyPostForUser(ctx context.Context, user *models.User, p
 	a.cycles.Complete(ctx, cycle.ID)
 	a.logger.Info("Auto-generated and scheduled a post",
 		zap.String("user_id", user.ID), zap.String("draft_id", draft.ID), zap.Time("publish_at", publishAt))
+}
+
+// topicFromInterest turns one of the user's chosen interests into a fresh,
+// specific post topic (so their auto-posts stay in their field and on-brand).
+func (a *Agent) topicFromInterest(ctx context.Context, user *models.User) (*models.Topic, error) {
+	interest := user.Interests[rand.Intn(len(user.Interests))]
+	history, _ := a.topics.RecentTitles(ctx, user.ID, topicHistoryWindow)
+	ideas, err := a.generator.GenerateTopicIdeas(ctx, interest, nil, history)
+	if err == nil {
+		for _, idea := range ideas {
+			if research.IsDuplicateTitle(idea.Title, history) {
+				continue
+			}
+			return &models.Topic{Title: idea.Title, Summary: idea.Hook, Source: "interest"}, nil
+		}
+		if len(ideas) > 0 {
+			return &models.Topic{Title: ideas[0].Title, Summary: ideas[0].Hook, Source: "interest"}, nil
+		}
+	}
+	// Fallback: use the interest itself as the topic.
+	return &models.Topic{Title: interest, Summary: "A practical LinkedIn post about " + interest, Source: "interest"}, nil
 }
 
 // pickFreshTopicForUser finds one trending topic this user hasn't covered.

@@ -205,6 +205,8 @@ func (s *Server) Start() error {
 	mux.HandleFunc("POST /generate-from-query", s.requireAuth(s.handleGenerateFromQuery))
 	mux.HandleFunc("GET /cycles", s.requireAuth(s.handleCycles))
 	mux.HandleFunc("GET /guide", s.requireAuth(s.handleGuide))
+	mux.HandleFunc("GET /settings", s.requireAuth(s.handleSettings))
+	mux.HandleFunc("POST /settings", s.requireAuth(s.handleSaveSettings))
 
 	srv := &http.Server{
 		Addr:    s.addr,
@@ -1094,4 +1096,71 @@ func (s *Server) handleCycles(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleGuide(w http.ResponseWriter, r *http.Request) {
 	s.renderPageFlash(w, r, "guide", "Guide", nil)
+}
+
+// suggestedInterests are quick-pick topic chips on the Settings page.
+var suggestedInterests = []string{
+	"Backend Engineering", "Frontend Development", "DevOps", "Cloud", "AI / ML",
+	"System Design", "Data Structures & Algorithms", "Databases", "Security",
+	"Microservices", "Web Development", "Mobile Development", "Testing & QA",
+	"Career Growth", "Startups", "Open Source", "Developer Productivity",
+}
+
+func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
+	u := userFromCtx(r.Context())
+	selected := make(map[string]bool, len(u.Interests))
+	var custom []string
+	suggestedSet := make(map[string]bool, len(suggestedInterests))
+	for _, s := range suggestedInterests {
+		suggestedSet[s] = true
+	}
+	for _, in := range u.Interests {
+		selected[in] = true
+		if !suggestedSet[in] {
+			custom = append(custom, in)
+		}
+	}
+	s.renderPageFlash(w, r, "settings", "Settings", map[string]interface{}{
+		"User":      u,
+		"Suggested": suggestedInterests,
+		"Selected":  selected,
+		"Custom":    strings.Join(custom, ", "),
+	})
+}
+
+func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	u := userFromCtx(ctx)
+	_ = r.ParseForm()
+
+	role := strings.TrimSpace(r.FormValue("role"))
+
+	// Selected suggestion chips + any custom comma-separated topics, deduped.
+	seen := make(map[string]bool)
+	var interests []string
+	add := func(v string) {
+		v = strings.TrimSpace(v)
+		if v == "" {
+			return
+		}
+		key := strings.ToLower(v)
+		if seen[key] {
+			return
+		}
+		seen[key] = true
+		interests = append(interests, v)
+	}
+	for _, v := range r.Form["interest"] {
+		add(v)
+	}
+	for _, v := range strings.Split(r.FormValue("custom"), ",") {
+		add(v)
+	}
+
+	if err := s.users.UpdatePreferences(ctx, u.ID, role, interests); err != nil {
+		s.logger.Error("Failed to save preferences", zap.Error(err))
+		s.redirect(w, r, "/settings?err=Could+not+save+settings")
+		return
+	}
+	s.redirect(w, r, "/settings?ok=Preferences+saved+—+future+posts+will+match+your+topics")
 }

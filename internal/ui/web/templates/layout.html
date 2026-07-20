@@ -42,14 +42,15 @@
   </button>
   {{if .User}}
   <div class="user-menu">
-    <button type="button" class="user-btn" id="user-btn" aria-haspopup="true" aria-expanded="false" title="{{.User.Name}}">
-      {{if .User.Picture}}<img src="{{.User.Picture}}" alt="" referrerpolicy="no-referrer">{{else}}<span class="user-initial">{{firstChar .User.Name}}</span>{{end}}
+    <button type="button" class="user-btn" id="user-btn" data-initial="{{firstChar .User.Name}}" aria-haspopup="true" aria-expanded="false" title="{{.User.Name}}">
+      {{if .User.Picture}}<img src="{{.User.Picture}}" alt="" referrerpolicy="no-referrer" onerror="var b=document.getElementById('user-btn');this.remove();var s=document.createElement('span');s.className='user-initial';s.textContent=b.getAttribute('data-initial');b.appendChild(s);">{{else}}<span class="user-initial">{{firstChar .User.Name}}</span>{{end}}
     </button>
     <div class="user-dropdown" id="user-dropdown">
       <div class="user-info">
         <div class="user-name">{{.User.Name}}</div>
         {{if .User.Email}}<div class="user-email">{{.User.Email}}</div>{{end}}
       </div>
+      <a href="/settings" class="user-menu-link">⚙️ Settings</a>
       <form method="POST" action="/logout"><button type="submit" class="user-logout">Sign out</button></form>
     </div>
   </div>

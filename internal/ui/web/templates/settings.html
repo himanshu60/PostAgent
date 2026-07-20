@@ -1,0 +1,50 @@
+{{define "settings"}}
+{{$sel := .Selected}}
+<style>
+  .chip { display:inline-flex; cursor:pointer; user-select:none; }
+  .chip input { position:absolute; opacity:0; width:0; height:0; }
+  .chip span {
+    display:inline-block; padding:8px 14px; border-radius:999px;
+    border:1px solid var(--border); background:var(--surface);
+    font-size:13px; font-weight:500; color:var(--text-muted);
+    transition:background .15s var(--ease-out), border-color .15s var(--ease-out), color .15s var(--ease-out), transform .12s var(--ease-out);
+  }
+  .chip:hover span { border-color:var(--border-strong); }
+  .chip:has(input:checked) span { background:var(--tint-blue); border-color:var(--blue); color:var(--blue); font-weight:650; }
+  .chip:has(input:focus-visible) span { box-shadow:var(--ring); }
+  .chip-grid { display:flex; flex-wrap:wrap; gap:9px; margin:12px 0 4px; }
+</style>
+
+<div class="card" style="max-width:760px;margin:0 auto;">
+  <div class="card-header"><span class="card-icon">⚙️</span><h2>Your preferences</h2></div>
+  <p style="color:var(--text-muted);font-size:14px;line-height:1.6;margin-bottom:22px;">
+    Tell the agent who you are and what you post about. Auto-generated posts will be drawn from <strong>your</strong> topics instead of generic trends — so every post fits your field.
+  </p>
+
+  <form method="POST" action="/settings">
+    <div style="margin-bottom:22px;">
+      <label style="display:block;font-size:13px;font-weight:600;margin-bottom:7px;">Your designation / role</label>
+      <input type="text" name="role" value="{{.User.Role}}" placeholder="e.g. Backend Engineer · Full-Stack Developer · DevOps Lead" style="width:100%;padding:11px 14px;border:1px solid var(--border);border-radius:10px;font-size:14px;">
+      <div style="font-size:12px;color:var(--text-dim);margin-top:6px;">Posts are written from this perspective.</div>
+    </div>
+
+    <div style="margin-bottom:22px;">
+      <label style="display:block;font-size:13px;font-weight:600;margin-bottom:2px;">Topics you want to post about</label>
+      <div style="font-size:12px;color:var(--text-dim);">Pick any that fit — click to toggle.</div>
+      <div class="chip-grid">
+        {{range .Suggested}}
+        <label class="chip"><input type="checkbox" name="interest" value="{{.}}" {{if index $sel .}}checked{{end}}><span>{{.}}</span></label>
+        {{end}}
+      </div>
+    </div>
+
+    <div style="margin-bottom:24px;">
+      <label style="display:block;font-size:13px;font-weight:600;margin-bottom:7px;">Add your own topics</label>
+      <input type="text" name="custom" value="{{.Custom}}" placeholder="e.g. Golang, Kubernetes, LLM agents (comma-separated)" style="width:100%;padding:11px 14px;border:1px solid var(--border);border-radius:10px;font-size:14px;">
+      <div style="font-size:12px;color:var(--text-dim);margin-top:6px;">Separate multiple topics with commas.</div>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Save preferences</button>
+  </form>
+</div>
+{{end}}

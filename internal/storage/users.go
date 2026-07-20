@@ -72,6 +72,15 @@ func (r *UserRepo) UpdateSettings(ctx context.Context, id string, autoPublish bo
 	return err
 }
 
+// UpdatePreferences persists a user's designation (role) and interest topics,
+// which tailor the posts the agent generates for them.
+func (r *UserRepo) UpdatePreferences(ctx context.Context, id, role string, interests []string) error {
+	_, err := r.coll.UpdateOne(ctx, bson.M{"_id": id}, bson.M{
+		"$set": bson.M{"role": role, "interests": interests},
+	})
+	return err
+}
+
 // Count returns how many users have ever signed in (total tenants).
 func (r *UserRepo) Count(ctx context.Context) int64 {
 	n, err := r.coll.CountDocuments(ctx, bson.M{})
