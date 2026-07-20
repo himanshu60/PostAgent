@@ -347,10 +347,11 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.renderPageFlash(w, r, "dashboard", "Dashboard", map[string]interface{}{
-		"Drafts":    drafts,
-		"Published": published,
-		"Cycles":    recentCycles,
-		"UserCount": s.users.Count(ctx),
+		"Drafts":     drafts,
+		"Published":  published,
+		"Cycles":     recentCycles,
+		"UserCount":  s.users.Count(ctx),
+		"NeedsPrefs": len(userFromCtx(ctx).Interests) == 0,
 	})
 }
 

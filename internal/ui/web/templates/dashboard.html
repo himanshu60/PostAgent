@@ -4,6 +4,20 @@
 {{$published := index $data "Published"}}
 {{$cycles := index $data "Cycles"}}
 {{$userCount := index $data "UserCount"}}
+{{$needsPrefs := index $data "NeedsPrefs"}}
+
+{{if $needsPrefs}}
+<div class="card" style="margin-bottom:18px;border:1px solid var(--blue);background:var(--tint-blue);">
+  <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+    <span style="font-size:26px;">🎯</span>
+    <div style="flex:1;min-width:220px;">
+      <div style="font-weight:700;color:var(--text);font-size:15px;">Personalize your posts</div>
+      <div style="color:var(--text-muted);font-size:13.5px;line-height:1.5;margin-top:2px;">Add your designation and the topics you care about — then every auto-generated post will match your field, not generic trends.</div>
+    </div>
+    <a href="/settings" class="btn btn-primary btn-sm">Set my topics →</a>
+  </div>
+</div>
+{{end}}
 
 {{if $userCount}}
 <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
