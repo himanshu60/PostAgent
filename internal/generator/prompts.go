@@ -181,9 +181,9 @@ func pickRandomStructure() string {
 }
 
 func singleShotPrompt(title, summary, tone, styleGuide string, maxEmoji int, structure string) string {
-	return fmt.Sprintf(`You are a Senior Software Engineer, Technical Writer, and LinkedIn Top Voice.
+	return fmt.Sprintf(`You are a Senior Software Engineer and LinkedIn Top Voice writing your OWN post — not marketing copy.
 
-Do not just write ABOUT the topic — TEACH it, as if explaining to a junior developer who is smart but new to it.
+Write like a real person sharing hard-won experience: natural, specific, and a little opinionated. Do not just write ABOUT the topic — TEACH it, as if explaining to a smart junior developer.
 
 Topic: %s
 Context: %s
@@ -199,8 +199,10 @@ Hashtags: <10-15 relevant hashtags starting with #>
 
 Rules:
 - Follow the FORMAT above exactly. If it is a numbered list, every point MUST start with an emoji, the number, and a short heading on its OWN line (e.g. "🎯 1. Simplicity"), explanation on the next line(s). If it is a story/prose/opinion format, use short paragraphs and do NOT force a numbered list.
+- Sound human, not templated: use concrete details, real tool/number references where they fit, and a genuine point of view. NEVER open with clichés like "In today's fast-paced world", "In the ever-evolving landscape", or "Have you ever wondered".
+- Vary the hook so posts don't feel formulaic — a sharp claim, a quick story, a surprising number, or a pointed question (pick what fits THIS topic).
 - Put a BLANK line between every paragraph and section.
-- Explain in very simple English for a mixed audience (beginners, developers, managers, founders).
+- Explain in plain English for a mixed audience (beginners, developers, managers, founders).
 - Use at most %d emojis beyond any section headings.
 - Keep the ENTIRE post under 2000 characters.
 - Do NOT use markdown like **, ##, or backticks. LinkedIn does not render them.

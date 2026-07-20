@@ -72,6 +72,15 @@ func (r *UserRepo) UpdateSettings(ctx context.Context, id string, autoPublish bo
 	return err
 }
 
+// Count returns how many users have ever signed in (total tenants).
+func (r *UserRepo) Count(ctx context.Context) int64 {
+	n, err := r.coll.CountDocuments(ctx, bson.M{})
+	if err != nil {
+		return 0
+	}
+	return n
+}
+
 // List returns all users — used by the scheduler to run each tenant's cycle.
 func (r *UserRepo) List(ctx context.Context) ([]models.User, error) {
 	cursor, err := r.coll.Find(ctx, bson.M{})

@@ -3,6 +3,15 @@
 {{$drafts := index $data "Drafts"}}
 {{$published := index $data "Published"}}
 {{$cycles := index $data "Cycles"}}
+{{$userCount := index $data "UserCount"}}
+
+{{if $userCount}}
+<div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
+  <span style="display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--text-muted);background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:6px 13px;">
+    👥 <strong style="color:var(--text);">{{$userCount}}</strong> {{if eq $userCount 1}}member{{else}}members{{end}} on PostAgent
+  </span>
+</div>
+{{end}}
 
 <div class="card" style="margin-bottom:16px;">
   <div class="card-header">

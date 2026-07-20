@@ -100,7 +100,8 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.renderBare(w, "login", "Sign in", map[string]interface{}{
-		"Error": r.URL.Query().Get("err"),
+		"Error":     r.URL.Query().Get("err"),
+		"UserCount": s.users.Count(r.Context()),
 	})
 }
 

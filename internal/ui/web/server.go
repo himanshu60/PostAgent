@@ -348,6 +348,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		"Drafts":    drafts,
 		"Published": published,
 		"Cycles":    recentCycles,
+		"UserCount": s.users.Count(ctx),
 	})
 }
 
