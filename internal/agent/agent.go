@@ -186,8 +186,30 @@ func (a *Agent) EnsureDailyPosts(ctx context.Context, publishAt time.Time, loc *
 		return
 	}
 	for i := range users {
+		// Auto-posting is opt-in: only users who enabled it get daily posts.
+		if !users[i].AutoPublish {
+			continue
+		}
 		a.ensureDailyPostForUser(ctx, &users[i], publishAt, loc)
 	}
+}
+
+// GenerateScheduledForUser generates and schedules the next post for a single
+// user on demand (used when they enable auto-post, so they see it work right
+// away). Schedules for 10:00 IST tomorrow.
+func (a *Agent) GenerateScheduledForUser(ctx context.Context, userID string) error {
+	user, err := a.users.GetByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	loc, lerr := time.LoadLocation("Asia/Kolkata")
+	if lerr != nil {
+		loc = time.UTC
+	}
+	now := time.Now().In(loc)
+	publishAt := time.Date(now.Year(), now.Month(), now.Day()+1, 10, 0, 0, 0, loc).UTC()
+	a.ensureDailyPostForUser(ctx, user, publishAt, loc)
+	return nil
 }
 
 func (a *Agent) ensureDailyPostForUser(ctx context.Context, user *models.User, publishAt time.Time, loc *time.Location) {

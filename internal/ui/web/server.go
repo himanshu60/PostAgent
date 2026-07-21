@@ -118,6 +118,7 @@ func (s *Server) recentSuggestedTitles() []string {
 type AgentBridge interface {
 	Generate(ctx context.Context, userID string, topicCount int) ([]models.Draft, error)
 	PublishScheduled(ctx context.Context) error
+	GenerateScheduledForUser(ctx context.Context, userID string) error
 }
 
 type layoutData struct {
@@ -207,6 +208,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("GET /guide", s.requireAuth(s.handleGuide))
 	mux.HandleFunc("GET /settings", s.requireAuth(s.handleSettings))
 	mux.HandleFunc("POST /settings", s.requireAuth(s.handleSaveSettings))
+	mux.HandleFunc("POST /settings/autopost", s.requireAuth(s.handleAutoPost))
 
 	srv := &http.Server{
 		Addr:    s.addr,
@@ -1164,4 +1166,32 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.redirect(w, r, "/settings?ok=Preferences+saved+—+future+posts+will+match+your+topics")
+}
+
+func (s *Server) handleAutoPost(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	u := userFromCtx(ctx)
+	if r.FormValue("action") == "enable" {
+		if err := s.users.SetAutoPost(ctx, u.ID, true); err != nil {
+			s.redirect(w, r, "/settings?err=Could+not+enable+auto-post")
+			return
+		}
+		// Kick off the first scheduled post now so they immediately see it work.
+		go func(uid string) {
+			c, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+			if err := s.agent.GenerateScheduledForUser(c, uid); err != nil {
+				s.logger.Warn("Auto-post enable: initial generate failed", zap.Error(err))
+			}
+		}(u.ID)
+		s.logger.Info("Auto-post enabled", zap.String("user_id", u.ID))
+		s.redirect(w, r, "/settings?autopost=enabled")
+		return
+	}
+	if err := s.users.SetAutoPost(ctx, u.ID, false); err != nil {
+		s.redirect(w, r, "/settings?err=Could+not+stop+auto-post")
+		return
+	}
+	s.logger.Info("Auto-post disabled", zap.String("user_id", u.ID))
+	s.redirect(w, r, "/settings?autopost=disabled")
 }

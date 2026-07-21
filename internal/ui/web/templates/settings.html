@@ -47,4 +47,34 @@
     <button type="submit" class="btn btn-primary">Save preferences</button>
   </form>
 </div>
+
+<div class="card" style="max-width:760px;margin:18px auto 0;">
+  <div class="card-header"><span class="card-icon">🤖</span><h2>Automatic posting</h2></div>
+  <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+    <div style="flex:1;min-width:240px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-weight:650;font-size:14px;">Status:</span>
+        {{if .User.AutoPublish}}
+        <span class="tag tag-approved">● ON</span>
+        {{else}}
+        <span class="tag tag-rejected">● OFF</span>
+        {{end}}
+      </div>
+      <div style="color:var(--text-muted);font-size:13.5px;line-height:1.6;margin-top:8px;">
+        When ON, the agent automatically researches a topic from <strong>your</strong> interests, writes a post, and publishes it to your LinkedIn every publish day (Mon/Wed/Fri, 10 AM IST) — hands-free. You can stop it anytime; scheduled posts already queued stay until they publish or you cancel them.
+      </div>
+    </div>
+    {{if .User.AutoPublish}}
+    <form method="POST" action="/settings/autopost">
+      <input type="hidden" name="action" value="disable">
+      <button type="submit" class="btn btn-danger" data-confirm="Stop automatic posting? The agent will no longer generate or publish posts for you until you turn it back on.">⏹ Stop auto-post</button>
+    </form>
+    {{else}}
+    <form method="POST" action="/settings/autopost">
+      <input type="hidden" name="action" value="enable">
+      <button type="submit" class="btn btn-success">⚡ Enable auto-post</button>
+    </form>
+    {{end}}
+  </div>
+</div>
 {{end}}

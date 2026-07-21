@@ -72,6 +72,14 @@ func (r *UserRepo) UpdateSettings(ctx context.Context, id string, autoPublish bo
 	return err
 }
 
+// SetAutoPost toggles whether the daily job auto-generates & publishes for a user.
+func (r *UserRepo) SetAutoPost(ctx context.Context, id string, enabled bool) error {
+	_, err := r.coll.UpdateOne(ctx, bson.M{"_id": id}, bson.M{
+		"$set": bson.M{"auto_publish": enabled},
+	})
+	return err
+}
+
 // UpdatePreferences persists a user's designation (role) and interest topics,
 // which tailor the posts the agent generates for them.
 func (r *UserRepo) UpdatePreferences(ctx context.Context, id, role string, interests []string) error {
