@@ -40,7 +40,7 @@ Render's paid Starter plan at ~$7/mo which never sleeps.)
 | **MongoDB Atlas** | Stores topics, drafts, published posts, cycles | ✅ Yes | <https://www.mongodb.com/cloud/atlas/register> |
 | **Google Gemini API** | Writes the post text (LLM) | ✅ Yes (if `LLM_PROVIDER=gemini`) | <https://aistudio.google.com/apikey> |
 | **LinkedIn API (OAuth2 + REST)** | Publishes posts + uploads images | ✅ Yes (for publishing) | <https://www.linkedin.com/developers/apps> |
-| **Pollinations.ai** | Generates the post image (free, keyless) | ✅ Yes (default image provider) | *no signup* |
+| **Handwritten sketchnotes** | Post images rendered inside the app (free, keyless) | ✅ Built in (default image provider) | *nothing to set up* |
 | OpenRouter | Optional LLM provider / fallback | ⬜ Optional | <https://openrouter.ai/keys> |
 | Ollama | Optional local LLM (self-hosted) | ⬜ Optional | <https://ollama.com> |
 | OpenAI | Optional image provider | ⬜ Optional | <https://platform.openai.com/api-keys> |
@@ -65,7 +65,7 @@ Set these in Render's **Environment** tab (§5). `✱` = required.
 ### Images
 | Variable | Example / default | Notes |
 |---|---|---|
-| `IMAGE_PROVIDER` ✱ | `pollinations` | **Keep `pollinations` on free plans.** `gemini`/`openai` need paid billing (free Gemini image tier returns HTTP 429). |
+| `IMAGE_PROVIDER` ✱ | `handwritten` | **Use `handwritten` on free plans** (free sketchnote images). `gemini`/`openai` need paid billing (free Gemini image tier returns HTTP 429). `pollinations` keeps the old AI illustrations. |
 | `OPENAI_API_KEY` | `sk-...` | Only if `IMAGE_PROVIDER=openai` |
 
 ### Database
@@ -139,7 +139,7 @@ Set these in Render's **Environment** tab (§5). `✱` = required.
    - No start command needed (the Dockerfile runs `agent -serve`, which binds
      `$PORT` automatically).
 4. **Environment →** add every `✱` variable from §2 (and any optional ones).
-   Set `AGENT_AUTO_PUBLISH=true`, `IMAGE_PROVIDER=pollinations`. Do **not** set
+   Set `AGENT_AUTO_PUBLISH=true`, `IMAGE_PROVIDER=handwritten`. Do **not** set
    `PORT` — Render provides it.
 5. **Create Web Service.** Render builds the image and deploys. Watch the logs
    for `Connected to MongoDB`, `LinkedIn publisher configured`, and

@@ -6,7 +6,8 @@ the agent researches trending software-engineering topics, writes on-brand posts
 they opt in — publishes them to **their own** LinkedIn account on a schedule.
 
 > Built in Go. Backed by MongoDB. Pluggable LLM (Gemini / OpenRouter / Ollama)
-> and image (Pollinations / Gemini / OpenAI) providers. Deployed on Render.
+> and image (free handwritten sketchnotes / Gemini / OpenAI / Pollinations)
+> providers. Deployed on Render.
 >
 > **Live:** <https://postagent-9fl6.onrender.com>
 
@@ -29,10 +30,21 @@ they opt in — publishes them to **their own** LinkedIn account on a schedule.
 - 🔎 **Trend research** — pulls from developer RSS (Hacker News, InfoQ, The New
   Stack, Stack Overflow Blog, GitHub Blog, dev.to) and NewsAPI, filtered by an
   LLM to a software-engineering audience and deduped against your history.
-- ✍️ **Human-sounding, varied posts** — 6 rotating formats (listicle, story,
-  single-idea, hot take, quick-lessons, comparison) with varied hooks, plus a
-  matching illustration. Per-user topic shuffling means two users never get the
-  same post.
+- ✍️ **Human-sounding, varied posts** — 14 post formats (story, hot take,
+  how-to, myth vs reality, checklist, mistakes I made, …). Each user's next post
+  avoids their last 5 formats, and hooks, endings and length are randomized, so
+  the feed never looks templated. AI-cliché phrases are banned, and stories or
+  opinions skip the bold title line.
+- 🖍️ **Free handwritten sketchnote images** — every post gets a hand-drawn
+  page (paper on a desk with pens, notebook, graph paper, whiteboard or
+  chalkboard) with the post's title, highlighted subtitle, a doodle, a
+  labelled diagram, annotations, the lesson, a question and hashtags. Real
+  handwriting fonts, so every word is legible; rendered locally, no API, no cost.
+  "Try another style" re-rolls the look on any draft.
+- #️⃣ **Reach-friendly hashtags** — 3–5 per post: popular topic tags matched to
+  the post (e.g. #Kubernetes, #SystemDesign) plus one broad tag, instead of a
+  spammy wall of 15.
+- Per-user topic shuffling means two users never get the same post.
 - 🎯 **Your topics & designation** — set your role and pick/add the topics you
   post about (Settings). Auto-generated posts are drawn from *your* interests
   and written from your role's perspective.
@@ -77,7 +89,7 @@ Set once, for the server. Users' LinkedIn tokens come from signing in — they a
 ```dotenv
 LLM_PROVIDER=gemini
 GEMINI_API_KEY=your_key_here      # https://aistudio.google.com/apikey
-IMAGE_PROVIDER=pollinations       # free, no key (Gemini images need paid billing)
+IMAGE_PROVIDER=handwritten        # free sketchnotes, no key (Gemini images need paid billing)
 MONGO_URI=mongodb://localhost:27017
 LINKEDIN_CLIENT_ID=...            # your LinkedIn OAuth app
 LINKEDIN_CLIENT_SECRET=...
@@ -102,7 +114,7 @@ LINKEDIN_API_VERSION=202606       # must be a currently-active YYYYMM
 | `LLM_PROVIDER` | `gemini` \| `openrouter` \| `ollama` | `openrouter` |
 | `LLM_FALLBACK_PROVIDER` | Auto-retry provider on quota/outage | *(none)* |
 | `GEMINI_API_KEY` | Required when provider/fallback is Gemini | — |
-| `IMAGE_PROVIDER` | `pollinations` \| `gemini` \| `openai` | `pollinations` |
+| `IMAGE_PROVIDER` | `handwritten` \| `gemini` \| `openai` \| `pollinations` | `handwritten` |
 | `MONGO_URI` | MongoDB connection string (**required**) | — |
 | `LINKEDIN_CLIENT_ID` / `LINKEDIN_CLIENT_SECRET` | Your LinkedIn OAuth app | — |
 | `LINKEDIN_API_VERSION` | Active LinkedIn API version (`YYYYMM`) | `202606` |
@@ -112,8 +124,11 @@ LINKEDIN_API_VERSION=202606       # must be a currently-active YYYYMM
 | `PORT` | Web server port (auto on Render/Railway/etc.) | `8081` |
 | `BRAND_VOICE_*` | Tone, max emoji, min line breaks | professional |
 
-> **Images on a free plan:** keep `IMAGE_PROVIDER=pollinations`. Gemini/Imagen
-> image models return HTTP 429 (quota 0) unless you enable Google Cloud billing.
+> **Images on a free plan:** use `IMAGE_PROVIDER=handwritten` (the default).
+> Gemini/Imagen image models return HTTP 429 (quota 0) unless you enable Google
+> Cloud billing; with billing on, `gemini`/`openai` are asked for the same
+> sketchnote, and the handwritten one is the preview and fallback.
+> `pollinations` keeps the old AI-illustration images.
 
 > Per-user `LINKEDIN_ACCESS_TOKEN` / `PERSON_ID` and `AGENT_AUTO_PUBLISH` env
 > vars are **not** used — tokens are captured at sign-in, and auto-posting is
@@ -146,4 +161,5 @@ publishing, components, and data model — see **[PROJECT_GUIDE.md](PROJECT_GUID
 ## Tech stack
 
 Go · MongoDB · LinkedIn OAuth2/OpenID Connect · Gemini/OpenRouter/Ollama ·
-Pollinations/Gemini/OpenAI · `robfig/cron` · `zap` · `gofeed` · Docker · Render.
+`fogleman/gg` (sketchnote renderer) · Gemini/OpenAI · `robfig/cron` · `zap` ·
+`gofeed` · Docker · Render.

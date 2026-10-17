@@ -5,6 +5,7 @@
 
 {{$title := $draft.Title}}
 {{if not $title}}{{if $topic}}{{$title = $topic.Title}}{{end}}{{end}}
+{{$img := draftImage $draft}}
 
 <div class="card">
   <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;">
@@ -26,10 +27,10 @@
   <div class="hashtags">{{join $draft.Hashtags " "}}</div>
   {{end}}
 
-  {{if and $draft.Media $draft.Media.SourceURL}}
+  {{if $img}}
   <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);">
     <div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;margin-bottom:10px;">Attached image</div>
-    <img src="{{$draft.Media.SourceURL}}" alt="post image" class="media-preview-img" style="max-width:100%;max-height:360px;object-fit:contain;">
+    <img src="{{$img}}" alt="{{if $draft.Media.AltText}}{{$draft.Media.AltText}}{{else}}post image{{end}}" class="media-preview-img" style="max-width:100%;max-height:420px;object-fit:contain;">
   </div>
   {{end}}
 </div>
@@ -106,10 +107,16 @@
 
 <div class="card">
   <h2>Set Media</h2>
-  {{if and $draft.Media $draft.Media.SourceURL}}
+  {{if $img}}
   <div style="margin-bottom:12px;">
-    <img src="{{$draft.Media.SourceURL}}" alt="media preview" class="media-preview-img">
+    <img src="{{$img}}" alt="media preview" class="media-preview-img">
   </div>
+  {{end}}
+  {{if ne $draft.Status "published"}}
+  <form method="POST" action="/drafts/{{$draft.ID}}/handwritten" style="margin-bottom:16px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
+    <button type="submit" class="btn btn-outline btn-sm">{{if and $draft.Media $draft.Media.Card}}🔄 Try another handwritten style{{else}}✍️ Use a handwritten image{{end}}</button>
+    <span style="font-size:12px;color:var(--text-dim);">Free hand-drawn notes of this post — notebook, sticky note, whiteboard, chalkboard or graph paper.</span>
+  </form>
   {{end}}
   <form method="POST" action="/drafts/{{$draft.ID}}/media" enctype="multipart/form-data">
     <select name="type" style="padding:6px 10px;border:1px solid var(--border);border-radius:4px;margin-right:8px;">

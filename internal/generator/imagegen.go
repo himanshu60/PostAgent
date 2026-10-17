@@ -130,6 +130,51 @@ func openAIImagePrompt(title string) string {
 	)
 }
 
+// sketchnoteImagePrompt asks a paid image model (Gemini/OpenAI, which render
+// text well) for the same hand-drawn sketchnote the free renderer draws,
+// spelling out every piece of text so the image matches the post.
+func sketchnoteImagePrompt(c models.NoteCard) string {
+	plain := func(s string) string { return strings.NewReplacer("==", "", "[[", "", "]]", "").Replace(s) }
+	var b strings.Builder
+	b.WriteString("A realistic top-down photo of a hand-drawn sketchnote on a sheet of white paper lying on a desk, ")
+	b.WriteString("with black and blue pens and a yellow highlighter beside it. Neat, legible handwriting in black and blue marker, ")
+	b.WriteString("yellow highlighter on key phrases, simple doodles, boxes and arrows connecting ideas. ")
+	fmt.Fprintf(&b, "Title at the top in large blue handwriting: %q. ", plain(c.Headline))
+	if c.Subtitle != "" {
+		fmt.Fprintf(&b, "Subtitle: %q. ", plain(c.Subtitle))
+	}
+	if c.Intro != "" {
+		fmt.Fprintf(&b, "A handwritten note: %q. ", plain(c.Intro))
+	}
+	if c.Icon != "" {
+		fmt.Fprintf(&b, "A doodle of a %s", c.Icon)
+		if c.IconLabel != "" {
+			fmt.Fprintf(&b, " labelled %q", plain(c.IconLabel))
+		}
+		b.WriteString(". ")
+	}
+	if c.Keyword != "" {
+		fmt.Fprintf(&b, "A boxed word in capitals: %q. ", strings.ToUpper(plain(c.Keyword)))
+	}
+	if len(c.Points) > 0 {
+		fmt.Fprintf(&b, "A small diagram titled %q listing: %s. ", plain(c.BoxTitle), plain(strings.Join(c.Points, "; ")))
+	}
+	if len(c.Notes) > 0 {
+		fmt.Fprintf(&b, "Annotations with arrows: %s. ", plain(strings.Join(c.Notes, " / ")))
+	}
+	if c.Footer != "" {
+		fmt.Fprintf(&b, "Highlighted near the bottom: \"The Lesson: %s\". ", plain(c.Footer))
+	}
+	if c.Question != "" {
+		fmt.Fprintf(&b, "A speech bubble with: %q. ", plain(c.Question))
+	}
+	if len(c.Hashtags) > 0 {
+		fmt.Fprintf(&b, "Hashtags in blue at the bottom: %s. ", strings.Join(c.Hashtags, " "))
+	}
+	b.WriteString("Spell every word exactly as given. No logos, no watermark.")
+	return b.String()
+}
+
 // stableSeed derives a deterministic seed from the title so re-generating the
 // same topic yields the same image (and different topics get different images).
 func stableSeed(s string) int {

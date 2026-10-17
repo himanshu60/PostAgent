@@ -2,7 +2,6 @@ package generator
 
 import (
 	"fmt"
-	"math/rand"
 	"strings"
 )
 
@@ -71,145 +70,290 @@ Angle 2: <title> | <hook>
 Angle 3: <title> | <hook>`, input.Title, input.Summary, formatKeywords(input.Keywords))
 }
 
-// singleShotPrompt produces the final LinkedIn post in ONE LLM call (structure,
-// polish, and hashtags together). Local models are slow, so collapsing the old
-// refine→write→polish pipeline into one call cuts generation time by ~3x.
-// postStructures are format variants rotated between posts so the feed
-// doesn't look templated. Every variant keeps the same required skeleton —
-// 5 numbered emoji-headed points, a 📌 Example, a 💡 Takeaway, and a closing
-// 💬 question — but frames the points differently. The numbered "emoji N.
-// heading" line format is load-bearing: normalizeBody/boldHeadings depend on
-// it for spacing and Unicode-bold styling.
-// postStructures are genuinely different post SHAPES (not the same skeleton
-// reworded) so a feed of these doesn't look templated. Some are numbered lists,
-// some are prose/story/opinion with no list at all. The numbered "emoji N.
-// heading" line format (where used) is load-bearing: normalizeBody/boldHeadings
-// style it. Non-list formats pass through untouched.
-var postStructures = []string{
-	// 1. Listicle — classic teaching breakdown (5 points)
-	`FORMAT: Numbered listicle (5 points).
+// postFormat is one genuinely different post SHAPE (not the same skeleton
+// reworded), so a feed of these reads like a person wrote them on different
+// days. Some are lists, most are prose. Where a format uses numbered "N."
+// lines, "Step N:" or Myth/Reality-style labels, normalizeBody/boldHeadings
+// space and bold them; everything else passes through untouched.
+type postFormat struct {
+	Name string
+	// ShowTitle publishes the bold title line above the post. Guides and lists
+	// suit a headline; stories and opinions read more human without one.
+	ShowTitle bool
+	Emoji     string   // emojiNone | emojiLight | emojiHeadings | emojiMarks
+	Lengths   []string // allowed length targets
+	Spec      string
+}
 
-<1-2 line hook that grabs attention>
+const (
+	emojiNone     = "none"
+	emojiLight    = "light"
+	emojiHeadings = "headings"
+	emojiMarks    = "marks"
 
-<1-2 line intro explaining why this matters>
+	lengthShort  = "SHORT: 400-800 characters"
+	lengthMedium = "MEDIUM: 800-1300 characters"
+	lengthLong   = "LONG: 1300-1900 characters"
+)
+
+var postFormats = []postFormat{
+	{Name: "listicle", ShowTitle: true, Emoji: emojiHeadings, Lengths: []string{lengthMedium, lengthLong}, Spec: `A numbered list of 5 points.
+
+<1-2 line hook>
+
+<1 line on why this matters>
 
 <emoji> 1. <short heading>
 <1-2 line explanation>
 
-(continue for exactly 5 numbered points, each with a different leading emoji)
+(continue to exactly 5 points, each with a different leading emoji)
 
 📌 Example:
-<one concrete real-world example>
+<one concrete real-world example>`},
 
-💡 Takeaway: <one valuable takeaway line>
+	{Name: "story", Emoji: emojiNone, Lengths: []string{lengthMedium, lengthLong}, Spec: `A first-person story with a lesson. No lists, no numbers.
 
-💬 <one discussion question to encourage comments>`,
+<1-2 line hook that drops the reader into a real moment>
 
-	// 2. Story / personal lesson — NO numbered list
-	`FORMAT: First-person story with a lesson. Do NOT use any numbered list.
+<4 to 6 SHORT paragraphs (1-3 lines each): the situation, what went wrong or surprised you, the turning point, what you do differently now. Use specific details: a tool, a number, a time of day.>`},
 
-<1-2 line hook that drops the reader into a moment or realization>
+	{Name: "one-idea", Emoji: emojiLight, Lengths: []string{lengthMedium}, Spec: `One sharp idea explored in prose. No lists.
 
-<3 to 5 SHORT paragraphs (1-3 lines each) telling a concrete story or experience related to the topic — a problem faced, what happened, the turn, the insight. Conversational, human, specific. No bullet points, no numbers.>
+<1-2 line hook stating the idea>
 
-💡 The lesson: <1-2 lines with the takeaway the story earned>
+<2 to 4 SHORT paragraphs: what it means, why most people miss it, why it matters now>
 
-💬 <one discussion question inviting readers to share their own experience>`,
+<one short paragraph with a concrete real-world example that makes it click>`},
 
-	// 3. One big idea — a single insight explored, NO list
-	`FORMAT: One strong idea explored in prose. Do NOT use a numbered list.
+	{Name: "hot-take", Emoji: emojiNone, Lengths: []string{lengthShort, lengthMedium}, Spec: `A bold opinion. Punchy. No lists.
 
-<1-2 line hook stating one counterintuitive or sharp idea about the topic>
+<1-2 line contrarian claim that makes people stop scrolling>
 
-<2 to 4 SHORT paragraphs unpacking that single idea: what it means, why most people miss it, why it matters now. Flowing prose, not bullets.>
+<2 to 3 SHORT paragraphs defending it with reasoning and one concrete detail>
 
-📌 In practice:
-<one concrete real-world example that makes the idea click>
+<one honest nuance, e.g. "To be fair, ...">`},
 
-💡 Takeaway: <one line>
+	{Name: "quick-lessons", ShowTitle: true, Emoji: emojiNone, Lengths: []string{lengthShort, lengthMedium}, Spec: `Three quick lessons, kept tight.
 
-💬 <one discussion question>`,
+<1 line hook>
 
-	// 4. Contrarian hot take — opinion piece, minimal structure
-	`FORMAT: Bold opinion / hot take. Punchy and short. No numbered list.
+1. <lesson in one line>
+<one sentence on why>
 
-<1-2 line bold, slightly contrarian claim about the topic that makes people stop>
+2. <lesson in one line>
+<one sentence on why>
 
-<2 to 3 SHORT paragraphs defending the claim with reasoning and a concrete detail, then adding one honest nuance ("to be fair...").>
+3. <lesson in one line>
+<one sentence on why>`},
 
-💡 Bottom line: <one sharp line>
+	{Name: "then-vs-now", Emoji: emojiLight, Lengths: []string{lengthMedium}, Spec: `A then-vs-now comparison.
 
-💬 <one discussion question that invites people to agree or push back>`,
+<1-2 line hook contrasting the old way of thinking with the new one>
 
-	// 5. Three quick lessons — a SHORT list of only 3 (different rhythm from 5)
-	`FORMAT: Three quick lessons. Only THREE points, kept tight.
+Then: <how people used to think or do it, 1-2 lines>
+Now: <what changed, 1-2 lines>
 
-<1 line punchy hook>
+<2 to 3 SHORT paragraphs on what the shift means for engineers today, with one concrete example>`},
 
-<1 line intro>
+	{Name: "mistakes", Emoji: emojiNone, Lengths: []string{lengthMedium}, Spec: `Mistakes you made, and what you do now. First person.
 
-<emoji> 1. <short heading>
-<1 line explanation>
+<1-2 line hook admitting the mistakes>
 
-<emoji> 2. <short heading>
-<1 line explanation>
+<3 to 4 mistakes. Each is one line starting with "→ " naming the mistake, then one line on what you do instead now>
 
-<emoji> 3. <short heading>
-<1 line explanation>
+<1-2 line reflection>`},
 
-💡 Takeaway: <one line>
+	{Name: "how-to", ShowTitle: true, Emoji: emojiNone, Lengths: []string{lengthMedium, lengthLong}, Spec: `A practical step-by-step guide.
 
-💬 <one discussion question>`,
+<1-2 line hook naming the problem it solves>
 
-	// 6. Before vs after / then vs now — comparison, no numbered list
-	`FORMAT: Then-vs-now (or myth-vs-reality) comparison in prose. No numbered list.
+Step 1: <action, one line>
+<optional short detail: a tool, command, or setting>
 
-<1-2 line hook contrasting an old way of thinking with a new one>
+(continue to 4-6 steps, same pattern)
 
-<2 to 4 SHORT paragraphs walking through what changed: what people used to believe/do, what shifted, and what it means for engineers today.>
+<1 line on the result readers should expect>`},
 
-📌 Example:
-<one concrete example of the shift>
+	{Name: "myth-vs-reality", ShowTitle: true, Emoji: emojiMarks, Lengths: []string{lengthMedium}, Spec: `Myths vs reality.
 
-💡 Takeaway: <one line>
+<1-2 line hook>
 
-💬 <one discussion question>`,
+❌ Myth: <a common belief>
+✅ Reality: <what's actually true, 1-2 lines>
+
+(exactly 3 myth/reality pairs, a blank line between pairs)`},
+
+	{Name: "checklist", ShowTitle: true, Emoji: emojiMarks, Lengths: []string{lengthShort, lengthMedium}, Spec: `A save-worthy checklist.
+
+<1-2 line hook saying who this is for>
+
+✅ <short, specific item>
+✅ <short, specific item>
+
+(5 to 7 items, each on its own line)
+
+<1 line on why this checklist matters>`},
+
+	{Name: "punchy", Emoji: emojiNone, Lengths: []string{lengthShort}, Spec: `Ultra-short, spoken rhythm. No lists.
+
+<5 to 8 short sentences, each on its own line, with blank lines between small groups. Every line earns its place.>`},
+
+	{Name: "question-led", Emoji: emojiNone, Lengths: []string{lengthShort, lengthMedium}, Spec: `A reflective post built around a real question.
+
+<open with a genuine question you've been thinking about>
+
+<2 to 3 SHORT paragraphs exploring different angles honestly>
+
+<where you landed, in 1-2 lines>`},
+
+	{Name: "framework", ShowTitle: true, Emoji: emojiLight, Lengths: []string{lengthMedium}, Spec: `A simple mental model or rule of thumb, with a name.
+
+<1-2 line hook>
+
+<name the framework in one line, e.g. "I use a 3-question rule:">
+
+→ <part 1 in one line>
+→ <part 2 in one line>
+→ <part 3 in one line>
+
+<2 short paragraphs: how you apply it, with one concrete example>`},
+
+	{Name: "do-dont", ShowTitle: true, Emoji: emojiMarks, Lengths: []string{lengthShort, lengthMedium}, Spec: `Do's and don'ts.
+
+<1-2 line hook>
+
+Do:
+✅ <short item>
+✅ <short item>
+✅ <short item>
+
+Don't:
+❌ <short item>
+❌ <short item>
+❌ <short item>
+
+<1 line takeaway>`},
 }
 
-func pickRandomStructure() string {
-	return postStructures[rand.Intn(len(postStructures))]
+// recentFormatsToAvoid is how many of a user's most recent formats are skipped
+// when picking the next one, so the same shape never shows up back to back.
+const recentFormatsToAvoid = 5
+
+// hookStyles and closingStyles vary the opening and ending independently of
+// the format, so even two posts of the same format start and end differently.
+var hookStyles = []string{
+	"Open with a specific number or metric that surprised you.",
+	"Open with a short confession about a mistake you made.",
+	"Open with a bold, slightly contrarian one-liner.",
+	"Open with a one-line scene from a real workday (a 2 AM page, a code review comment, a standup).",
+	"Open with a question a junior engineer once asked you.",
+	"Open with a common belief, then flip it on the second line.",
+	"Open with a punchy sentence of 3 to 7 words.",
 }
 
-func singleShotPrompt(title, summary, tone, styleGuide string, maxEmoji int, structure string) string {
-	return fmt.Sprintf(`You are a Senior Software Engineer and LinkedIn Top Voice writing your OWN post — not marketing copy.
+var closingStyles = []string{
+	"End with one specific question that invites readers to share their own experience. Not a generic \"Thoughts?\".",
+	"End with a short, punchy one-line takeaway. No question, no call to action.",
+	"End by asking whether readers agree or disagree, and why.",
+	"End with one practical thing to try this week. No question.",
+	"End with a one-line personal reflection, like you're telling a friend. No question.",
+	"End by asking readers what they would add.",
+}
 
-Write like a real person sharing hard-won experience: natural, specific, and a little opinionated. Do not just write ABOUT the topic — TEACH it, as if explaining to a smart junior developer.
+// postPlan is the randomized recipe for one post.
+type postPlan struct {
+	Format  postFormat
+	Hook    string
+	Closing string
+	Length  string
+}
+
+// pickFormat chooses a format at random, skipping the `avoid` most recent
+// distinct formats in recent (most-recent-first).
+func pickFormat(recent []string, avoid int, intn func(int) int) postFormat {
+	skip := make(map[string]bool, avoid)
+	for _, name := range recent {
+		if len(skip) >= avoid {
+			break
+		}
+		skip[name] = true
+	}
+	var pool []postFormat
+	for _, f := range postFormats {
+		if !skip[f.Name] {
+			pool = append(pool, f)
+		}
+	}
+	if len(pool) == 0 {
+		pool = postFormats
+	}
+	return pool[intn(len(pool))]
+}
+
+func newPostPlan(f postFormat, intn func(int) int) postPlan {
+	return postPlan{
+		Format:  f,
+		Hook:    hookStyles[intn(len(hookStyles))],
+		Closing: closingStyles[intn(len(closingStyles))],
+		Length:  f.Lengths[intn(len(f.Lengths))],
+	}
+}
+
+func emojiRule(f postFormat, maxEmoji int) string {
+	light := min(maxEmoji, 2)
+	switch {
+	case f.Emoji == emojiMarks:
+		return "Use only the ✅ / ❌ marks shown in the format. No other emojis."
+	case f.Emoji == emojiHeadings:
+		return fmt.Sprintf("Each numbered point starts with one emoji. Beyond those, at most %d more.", light)
+	case f.Emoji == emojiLight && light > 0:
+		return fmt.Sprintf("At most %d emojis, only where they add meaning.", light)
+	default:
+		return "No emojis at all."
+	}
+}
+
+// singleShotPrompt produces the final LinkedIn post in ONE LLM call (structure,
+// polish, and hashtags together). Local models are slow, so collapsing the old
+// refine→write→polish pipeline into one call cuts generation time by ~3x.
+func singleShotPrompt(title, summary, tone, styleGuide string, maxEmoji int, plan postPlan) string {
+	if strings.TrimSpace(styleGuide) != "" {
+		styleGuide += "\n(Use these notes for voice only. The format below decides the structure.)\n"
+	}
+	return fmt.Sprintf(`You are a Senior Software Engineer writing your OWN LinkedIn post, not marketing copy.
+
+Write like a real person sharing hard-won experience: natural, specific, a little opinionated. Teach the idea the way you'd explain it to a smart junior developer over coffee.
 
 Topic: %s
 Context: %s
 Tone: %s
 %s
-Write the post using EXACTLY this structure:
+Write the post in this format:
 
 %s
 
+Length: %s
+Hook: %s (If the format already dictates the opening, follow the format.)
+Ending: %s
+Emojis: %s
+
+After the post, write a line with three dashes, then the hashtags:
+
 ---
 
-Hashtags: <10-15 relevant hashtags starting with #>
+Hashtags: <5 hashtags people actually follow on LinkedIn: 3 specific to this exact topic (e.g. #Kubernetes, #GenerativeAI) and 2 broad ones with big audiences (e.g. #ArtificialIntelligence, #SoftwareEngineering, #Technology). Most-followed spelling only, no near-duplicates (never both #LLM and #LLMs), nothing invented or very long.>
 
 Rules:
-- Follow the FORMAT above exactly. If it is a numbered list, every point MUST start with an emoji, the number, and a short heading on its OWN line (e.g. "🎯 1. Simplicity"), explanation on the next line(s). If it is a story/prose/opinion format, use short paragraphs and do NOT force a numbered list.
-- Sound human, not templated: use concrete details, real tool/number references where they fit, and a genuine point of view. NEVER open with clichés like "In today's fast-paced world", "In the ever-evolving landscape", or "Have you ever wondered".
-- Vary the hook so posts don't feel formulaic — a sharp claim, a quick story, a surprising number, or a pointed question (pick what fits THIS topic).
-- Put a BLANK line between every paragraph and section.
-- Explain in plain English for a mixed audience (beginners, developers, managers, founders).
-- Use at most %d emojis beyond any section headings.
-- Keep the ENTIRE post under 2000 characters.
-- Do NOT use markdown like **, ##, or backticks. LinkedIn does not render them.
-- Do NOT print the "FORMAT: ..." line or any placeholder brackets in the output.
+- Follow the format above. Never print the word "FORMAT" or any <placeholder> brackets.
+- Sound human: concrete details, real tools and numbers where they fit, a genuine point of view. Vary sentence length. Contractions are fine.
+- Never use these AI-sounding words or phrases: delve, leverage, game-changer, unlock, landscape, realm, tapestry, navigate, harness, elevate, seamless, robust, cutting-edge, revolutionize, supercharge, "in today's fast-paced world", "in the ever-evolving", "let's dive in", "buckle up", "it's not just X, it's Y".
+- Use at most one em dash (—) in the whole post.
+- Put a BLANK line between paragraphs.
+- Plain English for a mixed audience (beginners, developers, managers, founders).
+- No markdown (**, ##, backticks). LinkedIn doesn't render it.
 
-IMPORTANT: Output ONLY the post starting directly with the hook. No title line, no preamble like "Here is the post".`,
-		title, summary, tone, styleGuide, structure, maxEmoji)
+IMPORTANT: Output ONLY the post, starting directly with the hook. No title line, no preamble like "Here is the post".`,
+		title, summary, tone, styleGuide, plan.Format.Spec, plan.Length, plan.Hook, plan.Closing, emojiRule(plan.Format, maxEmoji))
 }
 
 func draftWriterPrompt(input DraftWriterInput) string {
@@ -274,7 +418,7 @@ Requirements:
 - Use at most %d emojis, naturally.
 - Keep the entire post under 2000 characters.
 - Tone: %s.
-- Suggest 10-15 relevant, specific hashtags (mix broad and niche).
+- Suggest 3-5 relevant hashtags: 1 broad one for the field and 2-4 specific to the topic.
 %s
 Respond in this format ONLY (no markdown, no meta-text, no introductions):
 
