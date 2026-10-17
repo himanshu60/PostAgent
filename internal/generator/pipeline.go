@@ -5,24 +5,78 @@ import (
 	"fmt"
 	"math/rand"
 	"strings"
+	"sync"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 
 	"github.com/clodura/linkedin-post-agent/internal/llm"
 	"github.com/clodura/linkedin-post-agent/internal/models"
+	"github.com/clodura/linkedin-post-agent/internal/notecard"
 )
 
 type LLMGenerator struct {
 	llm    llm.Client
 	logger *zap.Logger
+
+	imageProvider string
+	formatHistory FormatHistoryFunc
+
+	// mu guards the in-process memory of each user's recent post formats and
+	// card styles. It covers drafts generated in one batch (not yet stored)
+	// and complements formatHistory, which survives restarts.
+	mu            sync.Mutex
+	recentFormats map[string][]string // userID → most recent first
+	recentStyles  map[string][]string
 }
+
+// FormatHistoryFunc returns a user's most recent post formats, newest first.
+type FormatHistoryFunc func(ctx context.Context, userID string, limit int) ([]string, error)
 
 func NewLLMGenerator(llmClient llm.Client, logger *zap.Logger) *LLMGenerator {
 	return &LLMGenerator{
-		llm:    llmClient,
-		logger: logger,
+		llm:           llmClient,
+		logger:        logger,
+		recentFormats: make(map[string][]string),
+		recentStyles:  make(map[string][]string),
 	}
+}
+
+// ImageProviderPollinations keeps the legacy AI-illustration image URL.
+const ImageProviderPollinations = "pollinations"
+
+// SetImageProvider selects how post images are made. "pollinations" keeps the
+// legacy AI-illustration URL; anything else (the default, "handwritten", and
+// also "gemini"/"openai", for which it is the preview and fallback) attaches a
+// free handwritten-notes card.
+func (g *LLMGenerator) SetImageProvider(provider string) {
+	g.imageProvider = strings.ToLower(strings.TrimSpace(provider))
+}
+
+// SetFormatHistory lets the generator look up a user's recent post formats
+// (persisted on drafts) so consecutive posts never share the same shape.
+func (g *LLMGenerator) SetFormatHistory(fn FormatHistoryFunc) {
+	g.formatHistory = fn
+}
+
+// chooseFormat picks the next post format for a user, avoiding the ones they
+// used most recently (in this process and, when wired, in the database).
+func (g *LLMGenerator) chooseFormat(ctx context.Context, userID string) postFormat {
+	g.mu.Lock()
+	recent := append([]string{}, g.recentFormats[userID]...)
+	g.mu.Unlock()
+	if g.formatHistory != nil && userID != "" {
+		if h, err := g.formatHistory(ctx, userID, recentFormatsToAvoid); err == nil {
+			recent = append(recent, h...)
+		} else {
+			g.logger.Warn("Format history lookup failed, using in-memory history", zap.Error(err))
+		}
+	}
+	f := pickFormat(recent, recentFormatsToAvoid, rand.Intn)
+	g.mu.Lock()
+	g.recentFormats[userID] = prependCapped(f.Name, g.recentFormats[userID], recentFormatsToAvoid)
+	g.mu.Unlock()
+	return f
 }
 
 // ideaCategoryPool is rotated through to actively steer idea generation away
@@ -143,13 +197,17 @@ func (g *LLMGenerator) PolishDraft(ctx context.Context, input PolisherInput) (*P
 func (g *LLMGenerator) GenerateFromTopic(ctx context.Context, topic models.Topic, voice BrandVoice, styleGuide string) (*models.Draft, error) {
 	g.logger.Info("Generating post from topic", zap.String("title", topic.Title))
 
+	// Each post gets a fresh recipe — a format this user hasn't seen lately,
+	// plus a random hook, ending and length — so the feed reads human.
+	plan := newPostPlan(g.chooseFormat(ctx, topic.UserID), rand.Intn)
+
 	// Single LLM call: structure, polish, and hashtags together. The old
 	// refine→write→polish pipeline made 3 calls per post, which was far too
 	// slow on a local model.
 	resp, err := g.llm.Chat(ctx, llm.ChatRequest{
 		Messages: []llm.Message{
 			{Role: "system", Content: "You are a LinkedIn content creator. Write authentic, engaging, well-structured posts."},
-			{Role: "user", Content: singleShotPrompt(topic.Title, topic.Summary, voice.Tone, styleGuide, voice.MaxEmoji, pickRandomStructure())},
+			{Role: "user", Content: singleShotPrompt(topic.Title, topic.Summary, voice.Tone, styleGuide, voice.MaxEmoji, plan)},
 		},
 	})
 	if err != nil {
@@ -161,32 +219,48 @@ func (g *LLMGenerator) GenerateFromTopic(ctx context.Context, topic models.Topic
 		return nil, fmt.Errorf("parse post: %w", err)
 	}
 
+	plain := normalizeBody(polished.Body)
 	draft := &models.Draft{
-		ID:       uuid.New().String(),
-		TopicID:  topic.ID,
-		Title:    topic.Title,
-		Body:     boldHeadings(convertMarkdownBold(normalizeBody(polished.Body))),
-		Hashtags: ensureHashtags(polished.Hashtags, topic.Keywords),
-		Status:   models.DraftStatusDraft,
+		ID:        uuid.New().String(),
+		TopicID:   topic.ID,
+		Title:     topic.Title,
+		Body:      boldHeadings(convertMarkdownBold(plain)),
+		Hashtags:  selectHashtags(polished.Hashtags, topic, plain),
+		Status:    models.DraftStatusDraft,
+		Format:    plan.Format.Name,
+		HideTitle: !plan.Format.ShowTitle,
 	}
-
-	// Attach a topic-relevant image. We store both a prompt (used by OpenAI at
-	// publish time when configured) and a Pollinations URL (free fallback that
-	// also works for the preview). The image is uploaded to LinkedIn at publish.
-	scene := g.imageSceneForTopic(ctx, topic)
-	draft.Media = &models.Media{
-		Type:      models.MediaTypeImage,
-		Prompt:    openAIImagePrompt(topic.Title),
-		SourceURL: pollinationsImageURL(pollinationsPrompt(scene, topic.Title), stableSeed(topic.Title)),
-		AltText:   topic.Title,
-	}
+	draft.Media = g.buildMedia(ctx, topic, plain, draft.Hashtags)
 
 	g.logger.Info("Generated draft",
 		zap.String("draft_id", draft.ID),
+		zap.String("format", draft.Format),
 		zap.Int("body_len", len(draft.Body)),
 		zap.Int("hashtags", len(draft.Hashtags)))
 
 	return draft, nil
+}
+
+// buildMedia attaches the post image, uploaded to LinkedIn at publish time.
+// The Prompt is always stored so a paid provider (gemini/openai) can render
+// from it; the handwritten card doubles as its preview and free fallback.
+func (g *LLMGenerator) buildMedia(ctx context.Context, topic models.Topic, body string, hashtags []string) *models.Media {
+	if g.imageProvider == ImageProviderPollinations {
+		scene := g.imageSceneForTopic(ctx, topic)
+		return &models.Media{
+			Type:      models.MediaTypeImage,
+			Prompt:    openAIImagePrompt(topic.Title),
+			SourceURL: pollinationsImageURL(pollinationsPrompt(scene, topic.Title), stableSeed(topic.Title)),
+			AltText:   topic.Title,
+		}
+	}
+	card := g.NoteCardFor(ctx, topic.UserID, topic.Title, body, hashtags)
+	return &models.Media{
+		Type:    models.MediaTypeImage,
+		Prompt:  sketchnoteImagePrompt(*card),
+		Card:    card,
+		AltText: notecard.AltText(*card),
+	}
 }
 
 func parseAngles(text string) ([]RefinedAngle, error) {

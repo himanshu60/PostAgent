@@ -141,6 +141,39 @@ func (r *DraftRepo) UpdateHashtags(ctx context.Context, id string, hashtags []st
 	return err
 }
 
+// UpdateFormat records which post format a draft uses and whether its title
+// line is published (used when a draft is regenerated).
+func (r *DraftRepo) UpdateFormat(ctx context.Context, id, format string, hideTitle bool) error {
+	_, err := r.coll.UpdateOne(ctx, bson.M{"_id": id}, bson.M{
+		"$set": bson.M{"format": format, "hide_title": hideTitle, "updated_at": time.Now()},
+	})
+	return err
+}
+
+// RecentFormats returns the post formats of a user's most recent drafts,
+// newest first, so the generator can avoid repeating the same shape.
+func (r *DraftRepo) RecentFormats(ctx context.Context, userID string, limit int) ([]string, error) {
+	opts := options.Find().
+		SetProjection(bson.M{"format": 1}).
+		SetSort(bson.M{"created_at": -1}).
+		SetLimit(int64(limit))
+	cursor, err := r.coll.Find(ctx, bson.M{"user_id": userID, "format": bson.M{"$nin": []interface{}{nil, ""}}}, opts)
+	if err != nil {
+		return nil, err
+	}
+	var docs []struct {
+		Format string `bson:"format"`
+	}
+	if err := cursor.All(ctx, &docs); err != nil {
+		return nil, err
+	}
+	formats := make([]string, len(docs))
+	for i, d := range docs {
+		formats[i] = d.Format
+	}
+	return formats, nil
+}
+
 func (r *DraftRepo) List(ctx context.Context, userID, status string, limit int) ([]models.Draft, error) {
 	filter := bson.M{"user_id": userID}
 	if status != "" {

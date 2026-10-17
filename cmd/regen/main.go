@@ -57,6 +57,8 @@ func main() {
 		log.Fatalf("llm: %v", err)
 	}
 	gen := generator.NewLLMGenerator(llmClient, logger)
+	gen.SetImageProvider(cfg.Image.Provider)
+	gen.SetFormatHistory(drafts.RecentFormats)
 	voice := generator.BrandVoiceFromConfig(cfg)
 
 	fmt.Printf("Regenerating draft %s (topic: %s)...\n", draftID, topic.Title)
@@ -74,8 +76,15 @@ func main() {
 	if err := drafts.UpdateMedia(ctx, draftID, newDraft.Media); err != nil {
 		log.Fatalf("update media: %v", err)
 	}
+	if err := drafts.UpdateFormat(ctx, draftID, newDraft.Format, newDraft.HideTitle); err != nil {
+		log.Fatalf("update format: %v", err)
+	}
 
-	fmt.Printf("\n=== NEW BODY ===\n%s\n\n=== HASHTAGS ===\n%v\n\n=== MEDIA ===\n%s\n",
-		newDraft.Body, newDraft.Hashtags, newDraft.Media.SourceURL)
+	image := newDraft.Media.SourceURL
+	if c := newDraft.Media.Card; c != nil {
+		image = fmt.Sprintf("handwritten %s card: %q %q", c.Style, c.Headline, c.Points)
+	}
+	fmt.Printf("\n=== NEW BODY (%s) ===\n%s\n\n=== HASHTAGS ===\n%v\n\n=== MEDIA ===\n%s\n",
+		newDraft.Format, newDraft.Body, newDraft.Hashtags, image)
 	fmt.Println("Done.")
 }

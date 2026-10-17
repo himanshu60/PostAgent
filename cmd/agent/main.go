@@ -82,6 +82,8 @@ func main() {
 	researchAgent := research.NewAgent(rssFetcher, newsFetcher, logger)
 
 	gen := generator.NewLLMGenerator(llmClient, logger)
+	gen.SetImageProvider(cfg.Image.Provider)
+	gen.SetFormatHistory(draftRepo.RecentFormats)
 	voice := generator.BrandVoiceFromConfig(cfg)
 
 	imageGen := publisher.ImageGenConfig{

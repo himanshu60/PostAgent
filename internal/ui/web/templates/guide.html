@@ -13,7 +13,7 @@
 <div class="grid-3">
   <div class="card">
     <div class="card-header"><span class="card-icon">✍️</span><h2>1 · Generate</h2></div>
-    <p style="color:var(--text-muted);font-size:14px;line-height:1.6;">Type a topic (or hit <strong>Run Cycle</strong>) and the agent researches trending developer news, then writes a full LinkedIn post with hashtags and a matching illustration.</p>
+    <p style="color:var(--text-muted);font-size:14px;line-height:1.6;">Type a topic (or hit <strong>Run Cycle</strong>) and the agent researches trending developer news, then writes a full LinkedIn post with hashtags and a hand-drawn sketchnote image.</p>
   </div>
   <div class="card">
     <div class="card-header"><span class="card-icon">🔎</span><h2>2 · Review</h2></div>
@@ -33,7 +33,7 @@
   </div>
   <div class="card">
     <div class="card-header"><span class="card-icon">🎨</span><h2>Auto visuals</h2></div>
-    <p style="color:var(--text-muted);font-size:14px;line-height:1.6;">Every post gets a clean, professional illustration generated to match the topic — attached natively when it publishes to LinkedIn.</p>
+    <p style="color:var(--text-muted);font-size:14px;line-height:1.6;">Every post gets a hand-drawn sketchnote of its key ideas — title, doodle, diagram, lesson and question in real handwriting — attached natively when it publishes to LinkedIn. Don't like the look? Hit <strong>Try another style</strong> on the draft.</p>
   </div>
   <div class="card">
     <div class="card-header"><span class="card-icon">🗣️</span><h2>Your brand voice</h2></div>
@@ -109,7 +109,7 @@ go run ./cmd/agent -serve   # http://localhost:8081</code></pre>
 
 <div class="card">
   <div class="card-header"><span class="card-icon">3️⃣</span><h2>Gemini API key</h2></div>
-  <p style="color:var(--text-muted);font-size:14px;line-height:1.7;">Go to <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a> → <strong>Create API key</strong> → copy it. That's your <code>GEMINI_API_KEY</code>. (Keep images on <strong>Pollinations</strong> — it's free and needs no key. Gemini image generation needs paid billing.)</p>
+  <p style="color:var(--text-muted);font-size:14px;line-height:1.7;">Go to <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a> → <strong>Create API key</strong> → copy it. That's your <code>GEMINI_API_KEY</code>. (Keep images on <strong>handwritten</strong> — free sketchnotes rendered by the app, no key needed. Gemini image generation needs paid billing.)</p>
 </div>
 
 <div class="card">
@@ -157,7 +157,7 @@ go run ./cmd/agent -serve   # http://localhost:8081</code></pre>
   <pre style="background:var(--input-bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;overflow-x:auto;font-size:12px;line-height:1.7;"><code>LLM_PROVIDER=gemini
 LLM_MODEL=gemini-2.5-flash
 GEMINI_MODEL=gemini-2.5-flash
-IMAGE_PROVIDER=pollinations
+IMAGE_PROVIDER=handwritten
 LINKEDIN_API_VERSION=202606
 MONGO_DB=linkedin_agent
 AGENT_SCHEDULE=CRON_TZ=Asia/Kolkata 0 0 9 * * *

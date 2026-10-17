@@ -47,8 +47,9 @@ func composeBody(draft *models.Draft) string {
 	body := strings.TrimSpace(draft.Body)
 	title := strings.TrimSpace(draft.Title)
 
-	// Add the title as a bold heading line, unless the body already opens with it.
-	if title != "" && !strings.HasPrefix(strings.ToLower(body), strings.ToLower(title)) {
+	// Add the title as a bold heading line, unless the body already opens with
+	// it or the post's format reads better without one (stories, hot takes).
+	if !draft.HideTitle && title != "" && !strings.HasPrefix(strings.ToLower(body), strings.ToLower(title)) {
 		b.WriteString(escapeLittleText(toBoldUnicode(title)))
 		b.WriteString("\n\n")
 	}
@@ -155,7 +156,8 @@ func (c *Client) CreatePost(ctx context.Context, draft *models.Draft) (postID st
 	//   1. pre-uploaded asset URN
 	//   2. user-uploaded local file
 	//   3. Gemini / OpenAI generated image (if configured) from the stored prompt
-	//   4. the draft's SourceURL image (e.g. Pollinations) as a fallback
+	//   4. the handwritten-notes card, rendered locally (free, no network)
+	//   5. the draft's SourceURL image (an uploaded/pasted image, or Pollinations)
 	if draft.Media != nil {
 		assetURN := draft.Media.LinkedInAssetURN
 
@@ -182,6 +184,15 @@ func (c *Client) CreatePost(ctx context.Context, draft *models.Draft) (postID st
 			uploaded, uerr := c.uploadOpenAIImage(ctx, draft.Media.Prompt)
 			if uerr != nil {
 				c.logger.Warn("OpenAI image failed, falling back to source image", zap.Error(uerr))
+			} else {
+				assetURN = uploaded
+			}
+		}
+
+		if assetURN == "" && draft.Media.Card != nil {
+			uploaded, uerr := c.uploadNoteCard(ctx, *draft.Media.Card)
+			if uerr != nil {
+				c.logger.Warn("Handwritten card upload failed, falling back to source image", zap.Error(uerr))
 			} else {
 				assetURN = uploaded
 			}

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"path"
@@ -22,6 +23,7 @@ import (
 	"github.com/clodura/linkedin-post-agent/internal/config"
 	"github.com/clodura/linkedin-post-agent/internal/generator"
 	"github.com/clodura/linkedin-post-agent/internal/models"
+	"github.com/clodura/linkedin-post-agent/internal/notecard"
 	"github.com/clodura/linkedin-post-agent/internal/research"
 	"github.com/clodura/linkedin-post-agent/internal/storage"
 )
@@ -159,6 +161,7 @@ func NewServer(addr string, logger *zap.Logger, agent AgentBridge, examples *ana
 		"formatScheduled": formatScheduled,
 		"nl2br":           nl2br,
 		"join":            strings.Join,
+		"draftImage":      draftImageURL,
 		"firstChar": func(s string) string {
 			runes := []rune(s)
 			if len(runes) > 0 {
@@ -192,6 +195,8 @@ func (s *Server) Start() error {
 	mux.HandleFunc("POST /drafts/{id}/cancel-schedule", s.requireAuth(s.handleDraftCancelSchedule))
 	mux.HandleFunc("POST /drafts/{id}/edit", s.requireAuth(s.handleDraftEdit))
 	mux.HandleFunc("POST /drafts/{id}/media", s.requireAuth(s.handleDraftMedia))
+	mux.HandleFunc("GET /drafts/{id}/image.png", s.requireAuth(s.handleDraftImage))
+	mux.HandleFunc("POST /drafts/{id}/handwritten", s.requireAuth(s.handleDraftHandwritten))
 	mux.HandleFunc("POST /drafts/{id}/reject", s.requireAuth(s.handleDraftReject))
 	mux.HandleFunc("GET /history", s.requireAuth(s.handleHistory))
 	mux.HandleFunc("POST /history/add", s.requireAuth(s.handleAddExample))
@@ -630,8 +635,7 @@ func (s *Server) handleDraftMedia(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Absolute, persistent URL: served from MongoDB, so it survives restarts
-		// AND is what gets uploaded to LinkedIn at publish time (taking priority
-		// over the auto-generated Pollinations image).
+		// AND is what gets uploaded to LinkedIn at publish time.
 		media.LocalPath = ""
 		media.SourceURL = baseURL(r) + "/media/" + id
 		media.LinkedInAssetURN = ""
@@ -641,6 +645,12 @@ func (s *Server) handleDraftMedia(w http.ResponseWriter, r *http.Request) {
 		media.LocalPath = ""
 		media.LinkedInAssetURN = ""
 		changed = true
+	}
+	if changed {
+		// The user's own image must win at publish time: drop the generated
+		// card and the AI prompt (Gemini/OpenAI run before SourceURL).
+		media.Card = nil
+		media.Prompt = ""
 	}
 
 	if !changed {
@@ -672,6 +682,82 @@ func (s *Server) saveUploadedMedia(ctx context.Context, userID, id, filename str
 		ct = "image/webp"
 	}
 	return s.media.Put(ctx, id, userID, ct, data)
+}
+
+// draftImageURL is the image to show for a draft: its rendered handwritten
+// card, or the stored source URL (an upload, a pasted link, or Pollinations).
+// The card URL carries the seed so a re-styled card is never served stale.
+func draftImageURL(d *models.Draft) string {
+	if d == nil || d.Media == nil {
+		return ""
+	}
+	if d.Media.Card != nil {
+		return fmt.Sprintf("/drafts/%s/image.png?v=%d", url.PathEscape(d.ID), d.Media.Card.Seed)
+	}
+	return d.Media.SourceURL
+}
+
+// handleDraftImage renders a draft's handwritten-notes card as a PNG.
+func (s *Server) handleDraftImage(w http.ResponseWriter, r *http.Request) {
+	d, ok := s.ownedDraft(r.Context(), r.PathValue("id"))
+	if !ok || d.Media == nil || d.Media.Card == nil {
+		http.NotFound(w, r)
+		return
+	}
+	data, err := notecard.Render(*d.Media.Card)
+	if err != nil {
+		s.logger.Error("Failed to render card image", zap.String("draft_id", d.ID), zap.Error(err))
+		http.Error(w, "Failed to render image", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "private, max-age=86400")
+	w.Write(data)
+}
+
+// handleDraftHandwritten gives a draft a handwritten-notes image. If it already
+// has one, it's re-styled (new look, same text, no LLM call); otherwise one is
+// built from the post body — which also upgrades older drafts that still
+// carry an AI illustration.
+func (s *Server) handleDraftHandwritten(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id := r.PathValue("id")
+	d, ok := s.ownedDraft(ctx, id)
+	if !ok {
+		s.redirect(w, r, "/drafts?err=Draft+not+found")
+		return
+	}
+	if d.Status == models.DraftStatusPublished {
+		s.redirect(w, r, "/drafts/"+id+"?err=Already+published+—+the+image+can't+change+now")
+		return
+	}
+
+	var card models.NoteCard
+	if d.Media != nil && d.Media.Card != nil {
+		card = *d.Media.Card
+		card.Style = notecard.RandomStyle(rand.New(rand.NewSource(rand.Int63())), card.Style)
+		card.Seed = rand.Int63()
+	} else {
+		title := d.Title
+		if title == "" {
+			if t, err := s.topics.GetByID(ctx, d.TopicID); err == nil {
+				title = t.Title
+			}
+		}
+		cctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		defer cancel()
+		card = *s.gen.NoteCardFor(cctx, d.UserID, title, d.Body, d.Hashtags)
+	}
+
+	// An explicit choice of the handwritten image wins at publish time, so the
+	// paid-provider prompt is dropped (it would otherwise run first).
+	media := &models.Media{Type: models.MediaTypeImage, Card: &card, AltText: notecard.AltText(card)}
+	if err := s.drafts.UpdateMedia(ctx, id, media); err != nil {
+		s.logger.Error("Failed to save handwritten image", zap.Error(err))
+		s.redirect(w, r, "/drafts/"+id+"?err=Could+not+update+the+image")
+		return
+	}
+	s.redirect(w, r, "/drafts/"+id+"?ok="+url.QueryEscape("Handwritten image ready ("+card.Style+" style)"))
 }
 
 func (s *Server) serveMedia(w http.ResponseWriter, r *http.Request) {
@@ -936,6 +1022,7 @@ func (s *Server) handleGenerateStream(w http.ResponseWriter, r *http.Request) {
 			"title":    idea.Title,
 			"body":     draft.Body,
 			"hashtags": draft.Hashtags,
+			"image":    draftImageURL(draft),
 		})
 		fmt.Fprintf(w, "event: draft\ndata: %s\n\n", draftEvent)
 		flusher.Flush()

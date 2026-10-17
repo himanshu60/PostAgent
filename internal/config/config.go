@@ -41,7 +41,7 @@ type GeminiConfig struct {
 }
 
 type ImageConfig struct {
-	Provider    string // pollinations | openai | gemini
+	Provider    string // handwritten | pollinations | openai | gemini
 	OpenAIKey   string
 	OpenAIModel string
 	GeminiModel string
@@ -152,7 +152,7 @@ func Load() (*Config, error) {
 			APIVersion:   getEnv("LINKEDIN_API_VERSION", "202606"),
 		},
 		Image: ImageConfig{
-			Provider:    getEnv("IMAGE_PROVIDER", "pollinations"),
+			Provider:    getEnv("IMAGE_PROVIDER", "handwritten"),
 			OpenAIKey:   os.Getenv("OPENAI_API_KEY"),
 			OpenAIModel: getEnv("OPENAI_IMAGE_MODEL", "gpt-image-1"),
 			GeminiModel: getEnv("GEMINI_IMAGE_MODEL", "gemini-3.1-flash-lite-image"),
@@ -161,7 +161,9 @@ func Load() (*Config, error) {
 			APIKey: os.Getenv("NEWSAPI_KEY"),
 		},
 		Agent: AgentConfig{
-			Schedule:    getEnv("AGENT_SCHEDULE", "0 9 * * 1,3,5"),
+			// The scheduler parses cron WITH a seconds field (6 fields); the old
+			// 5-field default crashed startup whenever AGENT_SCHEDULE was unset.
+			Schedule:    getEnv("AGENT_SCHEDULE", "CRON_TZ=Asia/Kolkata 0 0 9 * * *"),
 			TopicsCount: getEnvInt("AGENT_TOPICS_COUNT", 5),
 			AutoPublish: getEnvBool("AGENT_AUTO_PUBLISH", false),
 			PublishDays: parseWeekdays(getEnv("AGENT_PUBLISH_DAYS", "Mon,Wed,Fri")),

@@ -13,7 +13,12 @@ var markdownBoldRe = regexp.MustCompile(`\*\*(.+?)\*\*|__(.+?)__`)
 var pointHeadingRe = regexp.MustCompile(`^([^\w\n]{0,12}?)(\d{1,2}[.)]\s+)(\S.*?)\s*$`)
 
 // labelHeadingRe matches label-style headings like "📌 Example:" or "Takeaway:".
-var labelHeadingRe = regexp.MustCompile(`^([^\w\n]{0,12}?)(Example|Takeaway|Pro Tip|Key Takeaway|Bottom line|TL;DR|Discussion question|Final Thought)(\s*:)`)
+var labelHeadingRe = regexp.MustCompile(`^([^\w\n]{0,12}?)(Example|Takeaway|Pro Tip|Key Takeaway|Bottom line|TL;DR|Discussion question|Final Thought|Step \d{1,2})(\s*:)`)
+
+// pairLabelRe matches labels that come in tight pairs ("Myth:" / "Reality:",
+// "Then:" / "Now:", "Do:" / "Don't:"). They're bolded like other labels but
+// don't get a blank line forced before them, so each pair stays together.
+var pairLabelRe = regexp.MustCompile(`^([^\w\n]{0,12}?)(Myth|Reality|Then|Now|Do|Don't|Don’t)(\s*:)`)
 
 // normalizeBody enforces the post's visual rhythm regardless of what the LLM
 // produced: a blank line before every section heading, no runs of 3+ newlines,
@@ -53,7 +58,11 @@ func boldHeadings(body string) string {
 				continue
 			}
 		}
-		if m := labelHeadingRe.FindStringSubmatch(line); m != nil {
+		m := labelHeadingRe.FindStringSubmatch(line)
+		if m == nil {
+			m = pairLabelRe.FindStringSubmatch(line)
+		}
+		if m != nil {
 			rest := line[len(m[0]):]
 			lines[i] = m[1] + toBoldRunes(m[2]) + m[3] + rest
 		}
@@ -72,74 +81,6 @@ func convertMarkdownBold(s string) string {
 	// Drop leftover markdown emphasis markers that weren't part of a pair.
 	s = strings.ReplaceAll(s, "**", "")
 	return s
-}
-
-// evergreenTags are broad, tech-focused hashtags used to top up a post so it
-// always has a healthy hashtag count, since small models are unreliable here.
-var evergreenTags = []string{
-	"#SoftwareDevelopment", "#SoftwareEngineering", "#Programming", "#Coding",
-	"#WebDevelopment", "#BackendDevelopment", "#TechCommunity", "#Technology",
-	"#DeveloperCommunity", "#CloudComputing", "#SystemDesign", "#Developers",
-}
-
-// ensureHashtags merges the model's hashtags with topic keywords and evergreen
-// tags (deduped, case-insensitive) to reach a target of ~12 relevant hashtags.
-func ensureHashtags(existing []string, keywords []string) []string {
-	seen := map[string]bool{}
-	var out []string
-	add := func(tag string) {
-		tag = strings.TrimSpace(tag)
-		tag = strings.TrimPrefix(tag, "#")
-		// LinkedIn hashtags allow only letters and digits — "#CI/CD" would
-		// break at the slash. Strip everything else.
-		var clean strings.Builder
-		for _, r := range tag {
-			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
-				clean.WriteRune(r)
-			}
-		}
-		tag = clean.String()
-		if tag == "" {
-			return
-		}
-		tag = "#" + tag
-		key := strings.ToLower(tag)
-		if seen[key] {
-			return
-		}
-		seen[key] = true
-		out = append(out, tag)
-	}
-
-	for _, h := range existing {
-		add(h)
-	}
-	for _, k := range keywords {
-		add("#" + pascalCase(k))
-	}
-	for _, e := range evergreenTags {
-		if len(out) >= 12 {
-			break
-		}
-		add(e)
-	}
-	if len(out) > 15 {
-		out = out[:15]
-	}
-	return out
-}
-
-// pascalCase turns "remote work" into "RemoteWork" for use in a hashtag.
-func pascalCase(s string) string {
-	var b strings.Builder
-	for _, word := range strings.Fields(s) {
-		r := []rune(word)
-		b.WriteString(strings.ToUpper(string(r[0])))
-		if len(r) > 1 {
-			b.WriteString(string(r[1:]))
-		}
-	}
-	return b.String()
 }
 
 // toBoldRunes maps ASCII letters/digits to Unicode mathematical sans-serif bold.

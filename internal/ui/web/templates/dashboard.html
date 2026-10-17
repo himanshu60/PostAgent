@@ -144,14 +144,18 @@ form.addEventListener('submit', function(e) {
     var card = document.createElement('div');
     card.className = 'idea-card generated-draft';
     card.style.cssText = 'opacity:0;transform:translateY(10px);';
-    card.innerHTML =
-      '<div style="display:flex;gap:16px;">' +
-        '<div style="flex-shrink:0;width:200px;height:130px;border-radius:8px;overflow:hidden;">' +
+    // The real (handwritten) image when there is one; a gradient tile otherwise.
+    var thumb = data.image
+      ? '<div class="gen-thumb" style="flex-shrink:0;width:120px;height:150px;border-radius:8px;overflow:hidden;border:1px solid var(--border);"></div>'
+      : '<div style="flex-shrink:0;width:200px;height:130px;border-radius:8px;overflow:hidden;">' +
           '<div style="width:100%;height:100%;background:linear-gradient(135deg,hsl(' + c.h + ',' + c.s + '%,' + c.l + '%),hsl(' + ((c.h + 40) % 360) + ',' + (c.s + 10) + '%,' + (c.l - 10) + '%));display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;text-align:center;">' +
             '<span style="font-size:36px;margin-bottom:6px;">' + emoji + '</span>' +
             '<span style="color:#fff;font-size:13px;font-weight:600;line-height:1.3;text-shadow:0 1px 3px rgba(0,0,0,0.3);word-break:break-word;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;">' + escapeHtml(data.title) + '</span>' +
           '</div>' +
-        '</div>' +
+        '</div>';
+    card.innerHTML =
+      '<div style="display:flex;gap:16px;">' +
+        thumb +
         '<div style="flex:1;min-width:0;">' +
           '<div style="font-size:15px;font-weight:700;color:var(--text);line-height:1.3;">' + escapeHtml(data.title) + '</div>' +
           '<div style="font-size:13px;color:var(--text-muted);line-height:1.5;white-space:pre-wrap;margin-top:6px;">' + escapeHtml(bodyPreview) + '</div>' +
@@ -159,6 +163,15 @@ form.addEventListener('submit', function(e) {
           '<div style="margin-top:8px;"><a href="/drafts/' + encodeURIComponent(data.id) + '" class="btn btn-outline btn-sm">Preview & Approve</a></div>' +
         '</div>' +
       '</div>';
+    var thumbBox = card.querySelector('.gen-thumb');
+    if (thumbBox) {
+      var img = document.createElement('img');
+      img.src = data.image;
+      img.alt = data.title;
+      img.style.cssText = 'width:100%;height:100%;object-fit:cover;object-position:top;display:block;';
+      img.onerror = function () { thumbBox.style.display = 'none'; };
+      thumbBox.appendChild(img);
+    }
     posts.appendChild(card);
 
     requestAnimationFrame(function() {

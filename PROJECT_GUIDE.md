@@ -25,7 +25,7 @@ enough to restart safely and resume where it left off.
 | Language / runtime | **Go 1.25** | Single static binary, great concurrency, trivial to containerize. |
 | Datastore | **MongoDB** (`go.mongodb.org/mongo-driver`) | Flexible documents for drafts/topics/cycles; free Atlas tier. |
 | Text LLM | **Gemini / OpenRouter / Ollama** (pluggable) | Provider-agnostic with automatic fallback on quota/outage. |
-| Images | **Pollinations / Gemini / OpenAI** (pluggable) | Pollinations is free & keyless; others for higher quality. |
+| Images | **Handwritten sketchnotes** (`internal/notecard`) / Gemini / OpenAI / Pollinations | Sketchnotes are rendered locally — free, legible, on-topic. |
 | Publishing | **LinkedIn REST API** + OAuth2 | Official posting + native image/document upload. |
 | Scheduling | **`robfig/cron/v3`** + poll loops | Cron for the daily job; short poll for due posts. |
 | News/trends | **RSS (`gofeed`)** + **NewsAPI** | Developer-focused sources. |
@@ -138,10 +138,16 @@ This is what runs when you click **Run Cycle**, on `-once`, or from the daily jo
 3. **Load the style guide** — distilled from your past posts (analyzer), so the
    writing matches your established voice.
 4. **Generate drafts** — for each topic, `generator.GenerateFromTopic()`:
+   - picks a **post format** the user hasn't seen in their last 5 posts (14
+     formats; stored on `Draft.Format`) plus a random hook, ending and length;
    - writes the post body honoring `BRAND_VOICE_*` (tone, max emoji, line breaks);
-   - derives a **visual scene** (objects only, no text — image models render
-     words poorly) and builds a `Media` entry with an image prompt and a free
-     **Pollinations** URL as the ready-to-use image.
+   - selects **3–5 hashtags** (`generator/hashtags.go`): catalog tags matched to
+     the title/post plus the model's picks, with one broad reach tag;
+   - asks the LLM to distil the post into a **sketchnote** (title, highlighted
+     subtitle, note, doodle, diagram items, annotations, lesson, question —
+     falling back to the post's own structure) and stores it as `Media.Card`.
+     `internal/notecard` renders it to PNG on demand, deterministically from
+     its seed, so preview and published image match.
 5. **Persist** — store each `Draft`, attach it to the cycle, mark used custom
    topics as consumed.
 6. **Decide**:
@@ -172,8 +178,10 @@ never get duplicate posts. At most **one post per calendar day**.
 **How a post is published** (`publisher/client.go`) resolves the image in
 preference order: (1) a pre-uploaded LinkedIn asset URN → (2) a user-uploaded
 local file → (3) a Gemini/OpenAI generated image (if configured) → (4) the
-draft's Pollinations `SourceURL`. Whatever resolves first is uploaded as native
-LinkedIn media and attached to the post.
+handwritten sketchnote card, rendered locally → (5) the draft's `SourceURL` (an
+uploaded/pasted image, or a legacy Pollinations URL). Whatever resolves first is
+uploaded as native LinkedIn media and attached to the post. Uploading your own
+image clears the card and AI prompt, so your image always wins.
 
 ---
 
@@ -212,7 +220,7 @@ binary** via `//go:embed`, so the single binary ships the whole UI. Pages:
 The UI is theme-aware (light/dark) and **fully responsive** — below ~820px the
 nav collapses into a hamburger menu; the generate form stacks on phones.
 Generated/remote images load lazily with a skeleton shimmer and a graceful
-placeholder if a slow provider (Pollinations) hasn't finished rendering.
+placeholder if a remote image (e.g. legacy Pollinations) fails to load.
 
 ---
 
@@ -222,11 +230,11 @@ placeholder if a slow provider (Pollinations) hasn't finished rendering.
   errors (quota, rate limit, outage), calls transparently retry the fallback.
   The trending-relevance filter also degrades to a keyword heuristic if the LLM
   is entirely unavailable, so a cycle still produces output.
-- **Images** — `pollinations` is free/keyless (the default). `gemini` and
-  `openai` produce higher-quality images but need a paid API plan
-  (Gemini/Imagen image models return HTTP 429 on the free tier). Whatever the
-  provider, publishing falls back to the Pollinations URL if generation fails,
-  so a post is rarely blocked on imagery.
+- **Images** — `handwritten` (the default) renders sketchnotes locally: free,
+  no network, no rate limits. `gemini` and `openai` need a paid API plan
+  (Gemini/Imagen image models return HTTP 429 on the free tier); they're asked
+  for the same sketchnote, and the handwritten card is used if they fail.
+  `pollinations` keeps the legacy AI-illustration URL.
 - **LinkedIn API version** — `LINKEDIN_API_VERSION` (`YYYYMM`) must be a
   currently-active version. An expired value causes `426 NONEXISTENT_VERSION`;
   bump it per LinkedIn's changelog.
@@ -239,7 +247,7 @@ placeholder if a slow provider (Pollinations) hasn't finished rendering.
 |---|---|
 | Add/remove news sources | `internal/research/rss.go` (`defaultRSSFeeds`), `newsapi.go` |
 | Change the writing style/prompts | `internal/generator/prompts.go`, `text.go`, `BRAND_VOICE_*` env |
-| Change image look or provider logic | `internal/generator/imagegen.go`, `internal/publisher/*_image.go` |
+| Change image look or provider logic | `internal/notecard/` (sketchnote layout, doodles, themes), `internal/generator/notes.go`, `internal/publisher/*_image.go` |
 | Adjust the schedule/cadence | `AGENT_SCHEDULE`, `AGENT_PUBLISH_DAYS`, `internal/scheduler/scheduler.go` |
 | Add a web page or route | `internal/ui/web/server.go` + `templates/` |
 | Swap/extend LLM providers | `internal/llm/factory.go` + a new client |
